@@ -1,0 +1,73 @@
+{
+  "name": "liftbuilder",
+  "version": "1.0.0",
+  "description": "LiftBuilder — Weightlifting Program Manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "publish:mac": "electron-builder --mac --publish always",
+    "publish:win": "electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.liftbuilder.app",
+    "productName": "LiftBuilder",
+    "copyright": "Copyright © 2026 LiftBuilder",
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "vendor/**"
+    ],
+    "mac": {
+      "category": "public.app-category.sports",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "dmg": {
+      "title": "LiftBuilder",
+      "background": null,
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "JPDefender",
+      "repo": "liftbuilder"
+    }
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  }
+}

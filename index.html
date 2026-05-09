@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LiftBuilder — Weightlifting Program Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="vendor/fonts.css" rel="stylesheet">
+<script src="vendor/chart.umd.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <style>
 :root {
   --gold:#F5821F; --gold-light:#FFA552; --gold-dark:#B85D0A;
@@ -184,28 +184,7 @@ select option{background:#232323;}
 </head>
 <body>
 
-<!-- ── Auth screen ── -->
-<div id="auth-screen" style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--black);padding:1rem;">
-  <div style="background:var(--dark);border:1px solid var(--dark3);border-radius:12px;padding:2.5rem 2.5rem 2rem;width:min(380px,100%);text-align:center;box-shadow:0 4px 32px rgba(0,0,0,0.5);">
-    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:0.5rem;">
-      <div style="width:44px;height:44px;background:var(--gold);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;color:var(--black);letter-spacing:1px;flex-shrink:0;">LB</div>
-      <div style="text-align:left;">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;letter-spacing:1px;color:var(--white);">LiftBuilder</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px;">Weightlifting Program Manager</div>
-      </div>
-    </div>
-    <div style="width:36px;height:2px;background:var(--gold);margin:1.25rem auto;border-radius:1px;"></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1.75rem;line-height:1.6;">Sign in with your GitHub account to access your programs.</p>
-    <button id="auth-btn" onclick="signInWithGitHub()" style="background:var(--gold);color:var(--black);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.5px;padding:11px 24px;border:none;border-radius:5px;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;transition:background 0.15s;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-      Sign in with GitHub
-    </button>
-    <div id="auth-message" style="margin-top:1rem;font-size:12px;color:var(--muted);min-height:1.4em;line-height:1.5;"></div>
-  </div>
-</div>
-
-<!-- ── App (hidden until authenticated) ── -->
-<div id="app-shell" style="display:none;">
+<div id="app-shell">
 
 <!-- Header -->
 <div class="header">
@@ -217,9 +196,19 @@ select option{background:#232323;}
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span id="auth-user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;margin-right:4px;"></span>
     <span id="save-badge" style="font-size:11px;color:#5EC08A;opacity:0;transition:opacity 0.4s;display:flex;align-items:center;gap:4px;">✓ Saved</span>
+    <span id="app-version" style="font-size:10px;color:var(--muted);"></span>
+    <button id="update-btn" onclick="checkForUpdates()" style="display:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;letter-spacing:0.5px;padding:4px 11px;border-radius:3px;cursor:pointer;background:var(--gold-a10);color:var(--gold);border:1px solid var(--gold-a40);" title="Check for updates"></button>
     <div style="display:flex;gap:8px;" id="header-actions"></div>
+  </div>
+</div>
+
+<!-- Update toast -->
+<div id="update-toast" style="display:none;position:fixed;bottom:20px;right:20px;background:var(--dark);border:1px solid var(--gold-a40);border-left:3px solid var(--gold);border-radius:6px;padding:12px 16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;">
+  <div id="update-toast-msg" style="font-size:13px;color:var(--white);margin-bottom:8px;"></div>
+  <div style="display:flex;gap:8px;">
+    <button id="update-toast-action" onclick="updateAction()" style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;padding:4px 12px;border-radius:3px;cursor:pointer;background:var(--gold);color:var(--black);border:none;"></button>
+    <button onclick="document.getElementById('update-toast').style.display='none'" style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;padding:4px 10px;border-radius:3px;cursor:pointer;background:none;color:var(--muted);border:1px solid var(--dark3);">Dismiss</button>
   </div>
 </div>
 
@@ -245,13 +234,6 @@ select option{background:#232323;}
 </div><!-- /app-shell -->
 
 <script>
-// ═══════════════════════════════════════════════════
-//  AUTH CONFIG  — fill in after deploying the Worker
-// ═══════════════════════════════════════════════════
-const ALLOWED_USERS    = ['JPDefender', 'Valentzj'];
-const GITHUB_CLIENT_ID = 'Ov23ligqFDoP507F1Pfn';
-const WORKER_URL       = '/api/auth';
-
 // ═══════════════════════════════════════════════════
 //  CONSTANTS
 // ═══════════════════════════════════════════════════
@@ -345,100 +327,6 @@ let state = {
     }
   }
 };
-
-// ═══════════════════════════════════════════════════
-//  AUTH
-// ═══════════════════════════════════════════════════
-const AUTH_SESSION_KEY = 'liftbuilder_auth';
-
-async function initAuth() {
-  // 1. Valid session already in sessionStorage?
-  try {
-    const stored = sessionStorage.getItem(AUTH_SESSION_KEY);
-    if (stored) {
-      const { username } = JSON.parse(stored);
-      if (ALLOWED_USERS.includes(username)) { showApp(username); return; }
-    }
-  } catch(e) {}
-
-  // 2. Returning from GitHub OAuth redirect?
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  if (code) {
-    window.history.replaceState({}, '', window.location.pathname);
-    await handleOAuthCallback(code);
-    return;
-  }
-
-  // 3. Show the login screen
-  showAuthScreen();
-}
-
-async function handleOAuthCallback(code) {
-  setAuthMessage('Signing in…', true);
-  try {
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-
-    if (!data.access_token) {
-      setAuthMessage('Sign-in failed — please try again.');
-      return;
-    }
-
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${data.access_token}` },
-    });
-    const user = await userRes.json();
-
-    if (ALLOWED_USERS.includes(user.login)) {
-      sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ username: user.login }));
-      showApp(user.login);
-    } else {
-      setAuthMessage(`"${user.login}" is not authorized to access LiftBuilder.`);
-    }
-  } catch(e) {
-    setAuthMessage('Connection error — please try again.');
-  }
-}
-
-function signInWithGitHub() {
-  const p = new URLSearchParams({
-    client_id: GITHUB_CLIENT_ID,
-    scope: 'read:user',
-    redirect_uri: window.location.origin + window.location.pathname,
-  });
-  window.location.href = `https://github.com/login/oauth/authorize?${p}`;
-}
-
-function signOut() {
-  sessionStorage.removeItem(AUTH_SESSION_KEY);
-  window.location.reload();
-}
-
-function showAuthScreen() {
-  document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app-shell').style.display = 'none';
-}
-
-function setAuthMessage(msg, disableBtn = false) {
-  showAuthScreen();
-  document.getElementById('auth-message').textContent = msg;
-  const btn = document.getElementById('auth-btn');
-  if (btn) { btn.disabled = disableBtn; btn.style.opacity = disableBtn ? '0.6' : '1'; }
-}
-
-function showApp(username) {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-shell').style.display = '';
-  document.getElementById('auth-user-info').innerHTML =
-    `<span style="color:var(--muted);">${username}</span>` +
-    `<button onclick="signOut()" style="background:none;border:1px solid var(--dark3);border-radius:3px;cursor:pointer;color:#666;font-size:10px;padding:2px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:0.5px;">Sign out</button>`;
-  initApp();
-}
 
 // ═══════════════════════════════════════════════════
 //  THEMES
@@ -1780,7 +1668,89 @@ function initApp() {
   deleteProgram = function(...a) { _origDeleteProgram(...a); saveState(); };
 }
 
-initAuth();
+initApp();
+
+// ═══════════════════════════════════════════════════
+//  AUTO-UPDATE  (desktop only — window.liftbuilderApp
+//  is injected by preload.js when running in Electron)
+// ═══════════════════════════════════════════════════
+(function setupUpdater() {
+  const api = window.liftbuilderApp;
+  if (!api) return; // running in a browser, skip
+
+  let updateState = 'idle'; // idle | available | downloading | downloaded
+
+  // Show version in header
+  api.getVersion().then(v => {
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = `v${v}`;
+  });
+
+  // Reveal the update button once the app is ready
+  const btn = document.getElementById('update-btn');
+  if (btn) { btn.style.display = ''; btn.textContent = 'Check for Updates'; }
+
+  function showToast(msg, actionLabel) {
+    document.getElementById('update-toast-msg').textContent = msg;
+    document.getElementById('update-toast-action').textContent = actionLabel;
+    document.getElementById('update-toast').style.display = '';
+  }
+
+  function hideToast() {
+    document.getElementById('update-toast').style.display = 'none';
+  }
+
+  window.updateAction = function() {
+    if (updateState === 'available') {
+      updateState = 'downloading';
+      showToast('Downloading update…', '0%');
+      document.getElementById('update-toast-action').disabled = true;
+      api.downloadUpdate();
+    } else if (updateState === 'downloaded') {
+      api.installUpdate(); // quits and reinstalls
+    }
+  };
+
+  window.checkForUpdates = function() {
+    if (updateState === 'downloading') return;
+    if (updateState === 'downloaded') {
+      showToast('Update ready to install. Restart to apply it.', 'Restart Now');
+      return;
+    }
+    if (btn) btn.textContent = 'Checking…';
+    api.checkForUpdates().catch(() => {
+      if (btn) btn.textContent = 'Check for Updates';
+    });
+  };
+
+  api.onUpdateAvailable((version) => {
+    updateState = 'available';
+    if (btn) { btn.textContent = 'Update Available'; btn.style.background = 'var(--gold-a20)'; }
+    showToast(`LiftBuilder v${version} is available.`, 'Download Update');
+  });
+
+  api.onUpdateNotAvail(() => {
+    if (btn) btn.textContent = 'Up to Date';
+    setTimeout(() => { if (btn) btn.textContent = 'Check for Updates'; }, 3000);
+  });
+
+  api.onDownloadProgress((pct) => {
+    document.getElementById('update-toast-action').textContent = `${pct}%`;
+  });
+
+  api.onUpdateDownloaded(() => {
+    updateState = 'downloaded';
+    document.getElementById('update-toast-action').disabled = false;
+    if (btn) btn.textContent = 'Restart to Update';
+    showToast('Update downloaded. Restart to apply it.', 'Restart Now');
+  });
+
+  api.onUpdateError((msg) => {
+    updateState = 'idle';
+    if (btn) btn.textContent = 'Check for Updates';
+    showToast(`Update error: ${msg}`, 'Retry');
+  });
+})();
 </script>
 </body>
 </html>
