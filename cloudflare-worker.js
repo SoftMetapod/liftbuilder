@@ -1,64 +1,67 @@
 /**
- * LiftBuilder — GitHub OAuth token-exchange Worker
+ * LiftBuilder — Cloudflare Worker entry point
  *
- * Deploy on Cloudflare Workers (free tier).
- * Set these two environment variables as Worker secrets:
- *   GITHUB_CLIENT_ID      — from your GitHub OAuth App
- *   GITHUB_CLIENT_SECRET  — from your GitHub OAuth App (keep this secret!)
+ * POST /api/auth  →  exchanges a GitHub OAuth code for an access token
+ * Everything else →  served from static assets (index.html)
+ *
+ * Set these as Worker secrets in the Cloudflare dashboard
+ * (Settings → Variables → Add variable, mark as secret):
+ *   GITHUB_CLIENT_ID
+ *   GITHUB_CLIENT_SECRET
  */
-
-const ALLOWED_ORIGIN = 'https://jpdefender.github.io';
 
 export default {
   async fetch(request, env) {
-    const origin = request.headers.get('Origin') || '';
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    };
+    const url = new URL(request.url);
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
-
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405, headers: corsHeaders });
-    }
-
-    if (!origin.startsWith(ALLOWED_ORIGIN)) {
-      return new Response('Forbidden', { status: 403 });
-    }
-
-    try {
-      const { code } = await request.json();
-      if (!code) {
-        return new Response(JSON.stringify({ error: 'missing_code' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+    if (url.pathname === '/api/auth') {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: corsHeaders() });
       }
-
-      const ghRes = await fetch('https://github.com/login/oauth/access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          client_id: env.GITHUB_CLIENT_ID,
-          client_secret: env.GITHUB_CLIENT_SECRET,
-          code,
-        }),
-      });
-
-      const data = await ghRes.json();
-
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (request.method === 'POST') {
+        return handleAuth(request, env);
+      }
+      return new Response('Method not allowed', { status: 405 });
     }
+
+    // All other requests → serve static assets (index.html, etc.)
+    return env.ASSETS.fetch(request);
   },
 };
+
+async function handleAuth(request, env) {
+  try {
+    const { code } = await request.json();
+    if (!code) return jsonResponse({ error: 'missing_code' }, 400);
+
+    const ghRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        client_id: env.GITHUB_CLIENT_ID,
+        client_secret: env.GITHUB_CLIENT_SECRET,
+        code,
+      }),
+    });
+
+    const data = await ghRes.json();
+    return jsonResponse(data);
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+  });
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
