@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
@@ -24,20 +24,8 @@
     "mac": {
       "category": "public.app-category.sports",
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
       ],
       "icon": "build/icon.icns"
     },
