@@ -173,6 +173,16 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .vol-preview{background:var(--gold-a08);border:1px solid var(--gold-a20);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--gold-light);margin-top:.5rem;display:flex;justify-content:space-between;align-items:center;}
 .vol-preview strong{font-family:'Barlow Condensed',sans-serif;font-size:16px;color:var(--gold);}
 
+/* ── Warm-up section ── */
+.warmup-section{border-bottom:2px solid var(--dark3);}
+.warmup-header{display:flex;align-items:center;justify-content:space-between;padding:5px 13px 4px;background:rgba(58,134,212,0.07);border-bottom:1px solid rgba(58,134,212,0.12);}
+.warmup-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:#3A86D4;display:flex;align-items:center;gap:6px;flex:1;}
+.warmup-badge{font-size:10px;color:var(--muted);font-weight:400;font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;}
+.warmup-body{background:rgba(58,134,212,0.03);}
+.warmup-add-inline-btn{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:#3A86D4;background:rgba(58,134,212,0.1);border:1px solid rgba(58,134,212,0.25);border-radius:3px;cursor:pointer;padding:2px 8px;flex-shrink:0;}
+.warmup-add-inline-btn:hover{background:rgba(58,134,212,0.2);color:#6aabf7;}
+.warmup-ex-row td{color:var(--muted)!important;font-size:12px;}
+
 /* ── Empty state ── */
 .empty-msg{color:var(--muted);font-size:14px;padding:2rem;text-align:center;}
 
@@ -469,30 +479,52 @@ function buildProgramHTML() {
   const wd=getWeek(state.currentWeek);
   const phase=wd?wd.phase:'accumulation';
   const noteHTML=wd&&wd.note?`<div class="note-bar">📌 <span>${wd.note}</span></div>`:'';
+  const ws=weekNums();
+
+  function exRow(ex, i, section, totalInSection) {
+    let nameCell;
+    if(ex.isComplex && ex.movements && ex.movements.length){
+      const parts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${m.name}</span>`).join('');
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name||'Complex'}</span>${parts}`;
+    } else {
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}`;
+    }
+    const repsDisplay=ex.isComplex?`<span title="Reps per set">${ex.repsPerSet}<span style="font-size:10px;color:var(--muted);"> /set</span></span>`:ex.reps;
+    const isWarmup=section==='warmup';
+    const canUp=i>0, canDown=i<totalInSection-1;
+    return `<tr class="${isWarmup?'warmup-ex-row':''}">
+      <td style="width:24px;padding:2px 3px;">
+        <div style="display:flex;flex-direction:column;gap:1px;align-items:center;">
+          <button onclick="moveExercise('${ex._day}','${section}',${i},'up')" style="background:none;border:none;cursor:${canUp?'pointer':'default'};color:${canUp?'#666':'#2a2a2a'};font-size:10px;padding:0;line-height:1;" ${canUp?'':'disabled'}>▲</button>
+          <button onclick="moveExercise('${ex._day}','${section}',${i},'down')" style="background:none;border:none;cursor:${canDown?'pointer':'default'};color:${canDown?'#666':'#2a2a2a'};font-size:10px;padding:0;line-height:1;" ${canDown?'':'disabled'}>▼</button>
+        </div>
+      </td>
+      <td style="color:${isWarmup?'var(--muted)':'var(--white)'};">${nameCell}</td>
+      <td>${ex.sets}</td><td>${repsDisplay}</td>
+      <td>${ex.intensity>0?ex.intensity+'%':'—'}</td>
+      ${!isWarmup?`<td><span class="vol-pill">${ex.volume}</span></td>`:`<td style="color:var(--muted);font-size:11px;">warm-up</td>`}
+      <td style="white-space:nowrap;">
+        <button onclick="openEditExercise('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;" title="Edit">✏</button>
+        ${!isWarmup?`<button onclick="openMoveToDay('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:1px 5px;" title="Move to another day">↷</button>`:''}
+        <button onclick="deleteExercise('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;" title="Remove">✕</button>
+      </td>
+    </tr>`;
+  }
 
   const days=trainingDays().map(day=>{
     const dd=wd?wd.days[day]:null;
-    const dayVol=dd?dd.exercises.reduce((s,e)=>s+(e.volume||0),0):0;
-    const rows=dd?dd.exercises.map((ex,i)=>{
-      // Build name display — complexes show each movement on its own sub-line
-      let nameCell;
-      if(ex.isComplex && ex.movements && ex.movements.length){
-        const parts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${m.name}</span>`).join('');
-        nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name||'Complex'}</span>${parts}`;
-      } else {
-        nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}`;
-      }
-      const repsDisplay=ex.isComplex?`<span title="Reps per set">${ex.repsPerSet}<span style="font-size:10px;color:var(--muted);"> /set</span></span>`:ex.reps;
-      return `<tr>
-        <td style="color:var(--white);">${nameCell}</td>
-        <td>${ex.sets}</td><td>${repsDisplay}</td>
-        <td>${ex.intensity>0?ex.intensity+'%':'—'}</td>
-        <td><span class="vol-pill">${ex.volume}</span></td>
-        <td style="white-space:nowrap;">
-          <button onclick="openEditExercise('${day}',${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;" title="Edit">✏</button>
-          <button onclick="deleteExercise('${day}',${i})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;" title="Remove">✕</button>
-        </td>
-      </tr>`;}).join(''):'';
+    if(dd && !dd.warmup) dd.warmup=[];
+    const mainVol=dd?dd.exercises.reduce((s,e)=>s+(e.volume||0),0):0;
+    const warmupArr=dd&&dd.warmup?dd.warmup:[];
+    const warmupCount=warmupArr.length;
+    const dayNote=dd&&dd.dayNote?dd.dayNote:'';
+
+    // Tag each exercise with its day so exRow can reference it
+    const taggedMain=(dd?dd.exercises:[]).map(e=>({...e,_day:day}));
+    const taggedWarmup=warmupArr.map(e=>({...e,_day:day}));
+
+    const mainRows=taggedMain.map((ex,i)=>exRow(ex,i,'main',taggedMain.length)).join('');
+    const warmupRows=taggedWarmup.map((ex,i)=>exRow(ex,i,'warmup',taggedWarmup.length)).join('');
 
     return `<div class="day-card">
       <div class="day-card-header">
@@ -501,15 +533,31 @@ function buildProgramHTML() {
           <div class="day-focus-text">${dd&&dd.focus?dd.focus:'—'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;">
-          <span class="day-vol-badge">${dayVol} reps</span>
-          <button onclick="openAddExercise('${day}')" style="background:var(--gold-a12);border:1px solid var(--gold-a30);cursor:pointer;color:var(--gold);font-size:13px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;" title="Add exercise to ${day}">+ Add</button>
+          <span class="day-vol-badge">${mainVol} reps</span>
+          <button onclick="openAddExercise('${day}','main')" style="background:var(--gold-a12);border:1px solid var(--gold-a30);cursor:pointer;color:var(--gold);font-size:13px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;" title="Add working exercise">+ Add</button>
           <button onclick="openEditDay('${day}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;" title="Edit day">✏</button>
         </div>
       </div>
-      ${dd&&dd.exercises.length?`<table class="ex-table">
-        <thead><tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>%1RM</th><th>Vol</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`:`<div class="empty-msg" style="padding:1rem;" onclick="openAddExercise('${day}')" style="cursor:pointer;">No exercises yet — <span style="color:var(--gold);cursor:pointer;">+ Add one</span></div>`}
+      ${dayNote?`<div style="background:var(--gold-a08);border-bottom:1px solid var(--gold-a15);padding:5px 13px;font-size:12px;color:var(--gold-light);display:flex;align-items:center;gap:6px;">📌 <span>${dayNote}</span></div>`:''}
+      <div class="warmup-section">
+        <div class="warmup-header">
+          <div class="warmup-label">🔥 Warm-up <span class="warmup-badge">${warmupCount?warmupCount+' exercise'+(warmupCount>1?'s':''):''} <span style="opacity:0.6;">— not counted in volume</span></span></div>
+          <button onclick="openAddExercise('${day}','warmup')" class="warmup-add-inline-btn">+ Add</button>
+        </div>
+        <div class="warmup-body">
+          ${warmupRows?`<table class="ex-table">
+            <thead><tr><th style="width:20px;"></th><th>Exercise</th><th>Sets</th><th>Reps</th><th>%1RM</th><th></th><th></th></tr></thead>
+            <tbody>${warmupRows}</tbody>
+          </table>`:`<button onclick="openAddExercise('${day}','warmup')" style="display:block;width:100%;padding:8px 13px;background:none;border:none;border-top:1px dashed rgba(58,134,212,0.2);cursor:pointer;text-align:left;font-size:12px;color:#3A86D4;font-family:'Barlow Condensed',sans-serif;font-weight:600;">+ Add warm-up exercise</button>`}
+        </div>
+      </div>
+      <div>
+        <div style="padding:5px 13px 4px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);">Working Sets</div>
+        ${taggedMain.length?`<table class="ex-table">
+          <thead><tr><th style="width:20px;"></th><th>Exercise</th><th>Sets</th><th>Reps</th><th>%1RM</th><th>Vol</th><th></th></tr></thead>
+          <tbody>${mainRows}</tbody>
+        </table>`:`<div class="empty-msg" style="padding:.75rem 1rem;font-size:13px;cursor:pointer;" onclick="openAddExercise('${day}','main')">No working exercises — <span style="color:var(--gold);">+ Add one</span></div>`}
+      </div>
     </div>`;
   }).join('');
 
@@ -522,14 +570,64 @@ function buildProgramHTML() {
       <div style="flex:1;"></div>
       <button class="btn btn-outline" onclick="openDuplicateWeek()" style="font-size:13px;">⧉ Duplicate week</button>
       <button class="btn btn-outline" onclick="openAddExercise()" style="font-size:13px;">+ Add exercise</button>
+      ${ws.length>0?`<button class="btn btn-danger" onclick="confirmDeleteWeek()" style="font-size:13px;">🗑 Delete week</button>`:''}
     </div>
     ${noteHTML}
     <div class="days-grid">${days||'<div class="empty-msg">No program data. Create a week to get started.</div>'}</div>`;
 }
 
-function deleteExercise(day,idx) {
+function confirmDeleteWeek() {
+  if(!confirm(`Delete Week ${state.currentWeek}? All exercises for this week will be permanently removed.`)) return;
+  delete prog().weeks[state.currentWeek];
+  saveState();
+  const remaining=weekNums();
+  state.currentWeek=remaining.length?remaining[remaining.length-1]:null;
+  render();
+}
+
+function moveExercise(day, section, idx, dir) {
+  const wd=getWeek(state.currentWeek); if(!wd) return;
+  const arr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+  const newIdx=dir==='up'?idx-1:idx+1;
+  if(newIdx<0||newIdx>=arr.length) return;
+  [arr[idx],arr[newIdx]]=[arr[newIdx],arr[idx]];
+  saveState(); renderMain();
+}
+
+function openMoveToDay(fromDay, idx, section) {
+  const days=trainingDays().filter(d=>d!==fromDay);
+  if(!days.length){alert('No other training days to move to.');return;}
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Move Exercise to Another Day</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">The exercise will be appended to the working sets of the selected day.</p>
+    <div class="form-field"><label>Move to day</label>
+      <select id="move-day">${days.map(d=>`<option value="${d}">${d}</option>`).join('')}</select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="confirmMoveToDay('${fromDay}',${idx},'${section}')">Move</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function confirmMoveToDay(fromDay, idx, section) {
+  const toDay=document.getElementById('move-day').value;
+  const wd=getWeek(state.currentWeek); if(!wd) return;
+  const srcArr=section==='warmup'?(wd.days[fromDay].warmup||[]):wd.days[fromDay].exercises;
+  const [ex]=srcArr.splice(idx,1);
+  if(!wd.days[toDay]) wd.days[toDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+  if(!wd.days[toDay].exercises) wd.days[toDay].exercises=[];
+  wd.days[toDay].exercises.push(ex);
+  closeModal(); saveState(); renderMain();
+}
+
+function deleteExercise(day, idx, section='main') {
   const wd=getWeek(state.currentWeek);
-  if(wd&&wd.days[day]){wd.days[day].exercises.splice(idx,1);renderMain();}
+  if(wd&&wd.days[day]){
+    const arr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+    arr.splice(idx,1);
+    renderMain();
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1129,7 +1227,7 @@ function saveManageDays() {
   if(!days.length){alert('Select at least one training day.');return;}
   prog().trainingDays=days;
   const wd=getWeek(state.currentWeek);
-  if(wd) days.forEach(d=>{if(!wd.days[d]) wd.days[d]={focus:'',mobility:'',exercises:[]};});
+  if(wd) days.forEach(d=>{if(!wd.days[d]) wd.days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
   closeModal(); render();
 }
 
@@ -1138,11 +1236,12 @@ function saveManageDays() {
 // ═══════════════════════════════════════════════════
 function openEditDay(day) {
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  if(!wd.days[day]) wd.days[day]={focus:'',mobility:'',exercises:[]};
+  if(!wd.days[day]) wd.days[day]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
   const dd=wd.days[day];
   document.getElementById('modal-body').innerHTML=`
     <h3>Edit — ${day}</h3>
     <div class="form-field"><label>Session focus</label><input type="text" id="ed-focus" value="${dd.focus||''}" placeholder="e.g. Snatch / Bench / Squat"></div>
+    <div class="form-field"><label>Day note <span style="font-weight:400;color:var(--muted);font-size:10px;">(shown as a pinned note on the day card)</span></label><input type="text" id="ed-daynote" value="${dd.dayNote||''}" placeholder="e.g. Athlete choice — pick 2 of the 3 options"></div>
     <div class="form-field"><label>Mobility / Primer (shown in exports)</label><textarea id="ed-mob" rows="4" style="resize:vertical;">${dd.mobility||''}</textarea></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -1154,6 +1253,7 @@ function openEditDay(day) {
 function saveEditDay(day) {
   const wd=getWeek(state.currentWeek); if(!wd) return;
   wd.days[day].focus=document.getElementById('ed-focus').value.trim();
+  wd.days[day].dayNote=document.getElementById('ed-daynote').value.trim();
   wd.days[day].mobility=document.getElementById('ed-mob').value.trim();
   closeModal(); renderMain();
 }
@@ -1190,7 +1290,7 @@ function saveNewWeek() {
   const note=document.getElementById('m-note').value.trim();
   if(!w) return;
   const days={};
-  trainingDays().forEach(d=>{days[d]={focus:'',mobility:'',exercises:[]};});
+  trainingDays().forEach(d=>{days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
   prog().weeks[w]={note,phase,days};
   state.currentWeek=w;
   closeModal(); render();
@@ -1200,13 +1300,15 @@ function saveNewWeek() {
 //  ADD EXERCISE (with complex builder)
 // ═══════════════════════════════════════════════════
 let _exMode = 'single'; // 'single' | 'complex'
-let _movements = []; // [{name, reps}]
+let _exSection = 'main'; // 'main' | 'warmup'
+let _movements = []; // [{name, reps, category}]
 
-function openAddExercise(preDay) {
+function openAddExercise(preDay, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd){openAddWeek();return;}
   const days=trainingDays();
   const selDay=preDay&&days.includes(preDay)?preDay:days[0];
   _exMode='single';
+  _exSection=section;
   _movements=[{name:'',reps:1,category:'snatch'},{name:'',reps:1,category:'other'}];
   document.getElementById('modal-body').innerHTML=`
     <h3>Add Exercise — Week ${state.currentWeek}</h3>
@@ -1214,14 +1316,20 @@ function openAddExercise(preDay) {
       <div class="form-field" style="margin-bottom:0;"><label>Day</label>
         <select id="m-day">${days.map(d=>`<option value="${d}"${d===selDay?' selected':''}>${d}</option>`).join('')}</select>
       </div>
-      <div class="form-field" style="margin-bottom:0;"><label>Category</label>
-        <select id="m-cat">
-          <option value="snatch">Snatch</option><option value="clean">Clean / Jerk</option>
-          <option value="squat">Squat</option><option value="bench">Bench</option>
-          <option value="accessory">Accessory</option><option value="plyo">Plyo</option>
-          <option value="core">Core</option><option value="other">Other</option>
+      <div class="form-field" style="margin-bottom:0;"><label>Section</label>
+        <select id="m-section" onchange="_exSection=this.value">
+          <option value="main" ${section==='main'?'selected':''}>Working sets</option>
+          <option value="warmup" ${section==='warmup'?'selected':''}>Warm-up (not counted in volume)</option>
         </select>
       </div>
+    </div>
+    <div class="form-field" style="margin-bottom:.75rem;"><label>Category</label>
+      <select id="m-cat">
+        <option value="snatch">Snatch</option><option value="clean">Clean / Jerk</option>
+        <option value="squat">Squat</option><option value="bench">Bench</option>
+        <option value="accessory">Accessory</option><option value="plyo">Plyo</option>
+        <option value="core">Core</option><option value="other">Other</option>
+      </select>
     </div>
     <div class="ex-type-tabs">
       <div class="ex-type-tab active" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
@@ -1369,17 +1477,24 @@ function saveExercise() {
     ex={name,isComplex:false,sets,reps,intensity,volume,category};
   }
 
-  wd.days[day].exercises.push(ex);
+  if(_exSection==='warmup') {
+    if(!wd.days[day].warmup) wd.days[day].warmup=[];
+    wd.days[day].warmup.push(ex);
+  } else {
+    wd.days[day].exercises.push(ex);
+  }
   closeModal(); renderMain();
 }
 
 // ═══════════════════════════════════════════════════
 //  EDIT EXERCISE
 // ═══════════════════════════════════════════════════
-function openEditExercise(day, idx) {
+function openEditExercise(day, idx, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  const ex=wd.days[day]?.exercises[idx]; if(!ex) return;
+  const srcArr=section==='warmup'?(wd.days[day]?.warmup||[]):wd.days[day]?.exercises;
+  const ex=srcArr?srcArr[idx]:null; if(!ex) return;
   const days=trainingDays();
+  _exSection=section;
 
   _exMode=ex.isComplex?'complex':'single';
   _movements=ex.isComplex
@@ -1392,11 +1507,17 @@ function openEditExercise(day, idx) {
       <div class="form-field" style="margin-bottom:0;"><label>Day</label>
         <select id="m-day">${days.map(d=>`<option value="${d}"${d===day?' selected':''}>${d}</option>`).join('')}</select>
       </div>
-      <div class="form-field" style="margin-bottom:0;"><label>Category</label>
-        <select id="m-cat">
-          ${Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${ex.category===k?' selected':''}>${v.label}</option>`).join('')}
+      <div class="form-field" style="margin-bottom:0;"><label>Section</label>
+        <select id="m-section" onchange="_exSection=this.value">
+          <option value="main" ${section==='main'?'selected':''}>Working sets</option>
+          <option value="warmup" ${section==='warmup'?'selected':''}>Warm-up</option>
         </select>
       </div>
+    </div>
+    <div class="form-field" style="margin-bottom:.75rem;"><label>Category</label>
+      <select id="m-cat">
+        ${Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${ex.category===k?' selected':''}>${v.label}</option>`).join('')}
+      </select>
     </div>
     <div class="ex-type-tabs">
       <div class="ex-type-tab ${!ex.isComplex?'active':''}" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
@@ -1405,11 +1526,10 @@ function openEditExercise(day, idx) {
     <div id="ex-mode-body"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="saveEditExercise('${day}',${idx})">Save changes</button>
+      <button class="btn btn-gold" onclick="saveEditExercise('${day}',${idx},'${section}')">Save changes</button>
     </div>`;
   document.getElementById('overlay').style.display='flex';
 
-  // Pre-fill single fields after render
   renderExModeBody();
   if(!ex.isComplex) {
     const nb=document.getElementById('m-name'); if(nb) nb.value=ex.name||'';
@@ -1425,9 +1545,10 @@ function openEditExercise(day, idx) {
   }
 }
 
-function saveEditExercise(day, idx) {
+function saveEditExercise(day, idx, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd) return;
   const newDay=document.getElementById('m-day').value;
+  const newSection=document.getElementById('m-section').value;
   const sets=parseInt(document.getElementById('m-sets').value)||0;
   const intensity=parseInt(document.getElementById('m-int').value)||0;
   const category=document.getElementById('m-cat').value;
@@ -1440,12 +1561,7 @@ function saveEditExercise(day, idx) {
     const volume=sets*repsPerSet;
     const rawName=document.getElementById('m-name').value.trim();
     const autoName=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
-    ex={
-      name:rawName||autoName,
-      isComplex:true,
-      movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),
-      sets,reps:volume,repsPerSet,intensity,volume,category
-    };
+    ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),sets,reps:volume,repsPerSet,intensity,volume,category};
   } else {
     const name=document.getElementById('m-name').value.trim();
     if(!name){alert('Please enter an exercise name.');return;}
@@ -1453,13 +1569,16 @@ function saveEditExercise(day, idx) {
     ex={name,isComplex:false,sets,reps,intensity,volume:sets*reps,category};
   }
 
-  // Remove from old day, insert into new day at same index
-  if(!wd.days[newDay]) wd.days[newDay]={focus:'',mobility:'',exercises:[]};
-  if(newDay===day) {
-    wd.days[day].exercises[idx]=ex;
+  // Remove from source array
+  const srcArr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+  srcArr.splice(idx,1);
+  // Insert into destination
+  if(!wd.days[newDay]) wd.days[newDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+  const destArr=newSection==='warmup'?(wd.days[newDay].warmup||(wd.days[newDay].warmup=[])):wd.days[newDay].exercises;
+  if(newDay===day && newSection===section) {
+    destArr.splice(idx,0,ex); // preserve position when staying in same place
   } else {
-    wd.days[day].exercises.splice(idx,1);
-    wd.days[newDay].exercises.push(ex);
+    destArr.push(ex);
   }
   closeModal(); renderMain();
 }
