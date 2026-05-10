@@ -269,7 +269,9 @@ let state = {
   activeTab: 'program',
   currentWeek: 1,
   volWeek: null,
-  programs: {}
+  programs: {},
+  roster: { athletes: [], customFields: [] },
+  templates: []
 };
 
 // ═══════════════════════════════════════════════════
@@ -420,6 +422,8 @@ function renderSidebar() {
     {id:'program',icon:'📋',label:'Program'},
     {id:'volume',icon:'📊',label:'Volume'},
     {id:'peaking',icon:'🏆',label:'Peaking plan'},
+    {id:'roster',icon:'👥',label:'Roster'},
+    {id:'templates',icon:'📐',label:'Templates'},
   ];
   document.getElementById('sidebar').innerHTML=tabs.map(t=>`
     <div class="nav-item ${state.activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
@@ -442,6 +446,8 @@ function renderMain() {
   if(state.activeTab==='program') { area.innerHTML=buildProgramHTML(); }
   else if(state.activeTab==='volume') { area.innerHTML=buildVolumeHTML(); initVolumeCharts(); }
   else if(state.activeTab==='peaking') { area.innerHTML=buildPeakingHTML(); initPeakingChart(); }
+  else if(state.activeTab==='roster') { area.innerHTML=buildRosterHTML(); }
+  else if(state.activeTab==='templates') { area.innerHTML=buildTemplatesHTML(); }
 }
 
 // ── Switch program ──
@@ -735,62 +741,254 @@ function initVolumeCharts() {
 }
 
 // ═══════════════════════════════════════════════════
-//  PEAKING TAB
+//  PEAKING TAB  — real data + editable planned weeks
 // ═══════════════════════════════════════════════════
 function buildPeakingHTML() {
+  const ws = weekNums();
+  const p  = prog();
+  if (!ws.length) return `
+    <div class="week-bar"><div class="week-title">Peaking Plan</div></div>
+    <div class="empty-msg">No weeks in this program yet. Add weeks on the Program tab first.</div>`;
+
+  const storedComp = p._compWeek || (ws.length ? ws[ws.length-1] : 1);
+  const weekOpts = ws.map(w => {
+    const wd = getWeek(w);
+    const phase = wd ? (PHASES[wd.phase]||wd.phase) : '';
+    return `<option value="${w}" ${w===storedComp?'selected':''}>Week ${w}${phase?' — '+phase:''}</option>`;
+  }).join('');
+
+  // Planned weeks table rows
+  const planned = p._plannedWeeks || [];
+  const planRows = planned.length ? planned.map((pw,i) => `
+    <tr style="border-bottom:1px solid var(--dark3);">
+      <td style="padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;">Wk ${pw.week}</td>
+      <td style="padding:6px 10px;">
+        <select onchange="updatePlannedWeek(${i},'phase',this.value)" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:3px;padding:3px 6px;font-size:12px;font-family:'Barlow',sans-serif;width:100%;">
+          ${Object.entries(PHASES).map(([k,v])=>`<option value="${k}" ${pw.phase===k?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding:6px 10px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" value="${pw.targetVol}" min="0" max="9999" onchange="updatePlannedWeek(${i},'targetVol',+this.value)"
+            style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:3px;padding:3px 6px;font-size:12px;width:70px;font-family:'Barlow Condensed',sans-serif;">
+          <span style="font-size:11px;color:var(--muted);">reps</span>
+        </div>
+      </td>
+      <td style="padding:6px 10px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" value="${pw.targetInt}" min="0" max="100" onchange="updatePlannedWeek(${i},'targetInt',+this.value)"
+            style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:3px;padding:3px 6px;font-size:12px;width:55px;font-family:'Barlow Condensed',sans-serif;">
+          <span style="font-size:11px;color:var(--muted);">%</span>
+        </div>
+      </td>
+      <td style="padding:6px 8px;text-align:center;">
+        <button onclick="removePlannedWeek(${i})" style="background:none;border:none;cursor:pointer;color:#555;font-size:13px;" title="Remove">✕</button>
+      </td>
+    </tr>`).join('') :
+    `<tr><td colspan="5" style="padding:10px;font-size:12px;color:var(--muted);text-align:center;">No planned weeks yet — click "+ Add planned week" to project future training</td></tr>`;
+
+  const phaseLegend = [
+    {color:'#3A86D4',label:'Accumulation'},{color:'#5EC08A',label:'Intensification'},
+    {color:'#C9A84C',label:'Realization'},{color:'#888',label:'Deload'},
+  ].map(p=>`<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);">
+    <span style="width:9px;height:9px;border-radius:2px;background:${p.color};flex-shrink:0;"></span>${p.label}</span>`).join('');
+
   return `
     <div class="week-bar"><div class="week-title">Peaking Plan</div></div>
-    <div class="peaking-inputs">
-      <label>Total weeks <input type="number" id="total-weeks" value="12" min="4" max="24" onchange="initPeakingChart()"></label>
-      <label>Competition week <input type="number" id="comp-week" value="10" min="1" max="24" onchange="initPeakingChart()"></label>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+      <div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--muted);">Competition week:</span>
+        <select id="comp-week-sel" onchange="setCompWeek(this.value)" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:5px 10px;font-size:13px;font-family:'Barlow',sans-serif;flex:1;">
+          ${weekOpts}
+        </select>
+      </div>
+      <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Program</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;">${ws.length} logged week${ws.length!==1?'s':''} · ${planned.length} planned</div>
+        </div>
+        <button onclick="addPlannedWeek()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">+ Add planned week</button>
+      </div>
     </div>
+
     <div style="margin-bottom:1.25rem;">
       <div class="chart-label" style="margin-bottom:.5rem;">Season timeline</div>
       <div id="timeline-strip" class="timeline-strip"></div>
-      <div style="display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;">
-        <span>🔵 Accumulation</span><span>🟢 Intensification</span><span>🟡 Realization</span><span>⚫ Deload</span><span>🏆 Competition</span>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">${phaseLegend}
+        <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);">🏆 Competition</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);"><span style="display:inline-block;width:18px;border-top:2px dashed #555;"></span>Planned</span>
       </div>
     </div>
-    <div class="chart-label">Volume vs Intensity periodization curve</div>
-    <div class="chart-card"><div class="chart-wrap" style="height:230px;"><canvas id="peakChart"></canvas></div></div>`;
+
+    <div class="chart-label">Volume &amp; intensity — logged (solid) + planned (dashed)</div>
+    <div class="chart-card" style="margin-bottom:1.25rem;"><div class="chart-wrap" style="height:240px;"><canvas id="peakOverlayChart"></canvas></div></div>
+
+    ${planned.length||true?`
+    <div class="chart-label" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Planned weeks</span>
+    </div>
+    <div class="chart-card" style="padding:0;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--dark2);border-bottom:1px solid var(--dark3);">
+            <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;">Week</th>
+            <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;">Phase</th>
+            <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;">Target volume</th>
+            <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;">Target intensity</th>
+            <th style="width:32px;"></th>
+          </tr>
+        </thead>
+        <tbody id="planned-rows">${planRows}</tbody>
+      </table>
+    </div>`:''}`;
+}
+
+function setCompWeek(val) {
+  if (prog()) { prog()._compWeek = parseInt(val); saveState(); }
+  initPeakingChart();
+}
+
+function addPlannedWeek() {
+  const p = prog();
+  if (!p._plannedWeeks) p._plannedWeeks = [];
+  const ws = weekNums();
+  const allWks = [...ws, ...p._plannedWeeks.map(pw=>pw.week)].sort((a,b)=>a-b);
+  const nextWk = allWks.length ? Math.max(...allWks)+1 : 1;
+  // Suggest targets based on last real week
+  const lastReal = ws.length ? ws[ws.length-1] : null;
+  const lastVol  = lastReal ? totalVol(lastReal) : 300;
+  const lastInt  = lastReal ? avgInt(lastReal) : 70;
+  p._plannedWeeks.push({ week: nextWk, phase:'intensification', targetVol: lastVol, targetInt: Math.min(lastInt+3, 95) });
+  p._plannedWeeks.sort((a,b)=>a.week-b.week);
+  saveState();
+  // Re-render peaking tab
+  switchTab('peaking'); renderMain(); initPeakingChart();
+}
+
+function removePlannedWeek(i) {
+  const p = prog();
+  if (!p._plannedWeeks) return;
+  p._plannedWeeks.splice(i,1);
+  saveState();
+  switchTab('peaking'); renderMain(); initPeakingChart();
+}
+
+function updatePlannedWeek(i, key, val) {
+  const p = prog();
+  if (!p._plannedWeeks || !p._plannedWeeks[i]) return;
+  p._plannedWeeks[i][key] = val;
+  saveState();
+  initPeakingChart(); // refresh chart only, not full re-render
 }
 
 function initPeakingChart() {
-  const pid=state.activeProgId;
-  const comp=parseInt(document.getElementById('comp-week').value)||10;
-  const total=parseInt(document.getElementById('total-weeks').value)||12;
-  const peakVol=Math.max(1,comp-3);
-  let tl='';
-  for(let i=1;i<=total;i++){
-    let bg,color,lbl;
-    const ac=_theme.accent,acL=_theme.light;
-    if(i===comp){bg=hexToRgba(ac,0.25);color=acL;lbl='🏆';}
-    else if(i===comp-1){bg='rgba(136,136,136,0.15)';color='#888';lbl='↓';}
-    else if(i===peakVol){bg='rgba(94,192,138,0.2)';color='#5EC08A';lbl='↑';}
-    else if(i<peakVol){bg='rgba(31,95,166,0.15)';color='#3A86D4';lbl='';}
-    else{bg=hexToRgba(ac,0.1);color=ac;lbl='';}
-    tl+=`<div class="tl-week" style="background:${bg};color:${color};border:${i===comp?`1px solid ${hexToRgba(ac,0.5)}`:'1px solid transparent'};"><div style="font-size:13px;">${lbl||'·'}</div><div>W${i}</div></div>`;
-  }
-  document.getElementById('timeline-strip').innerHTML=tl;
+  const pid = state.activeProgId;
+  const ws  = weekNums();
+  if (!ws.length) return;
 
-  const labels=Array.from({length:total},(_,i)=>'W'+(i+1));
-  function vC(w){if(w<=peakVol)return Math.round(60+(w/peakVol)*40);return Math.round(100-((w-peakVol)/(comp-peakVol))*65);}
-  function iC(w){if(w<comp-1)return Math.round(62+(w/(comp-1))*28);if(w===comp-1)return 88;return w===comp?100:Math.round(62+(w/comp)*30);}
+  const p = prog();
+  const compWeek = p._compWeek && ws.includes(p._compWeek) ? p._compWeek : ws[ws.length-1];
+  const planned  = (p._plannedWeeks || []).sort((a,b)=>a.week-b.week);
 
-  if(charts[pid]&&charts[pid].peak) charts[pid].peak.destroy();
+  // Real data
+  const realVols = ws.map(totalVol);
+  const realInts = ws.map(avgInt);
+
+  // Combine real + planned for labels
+  const allWeeks = [...new Set([...ws, ...planned.map(pw=>pw.week)])].sort((a,b)=>a-b);
+  const labels   = allWeeks.map(w=>'Wk '+w);
+
+  const realVolData = allWeeks.map(w => ws.includes(w) ? realVols[ws.indexOf(w)] : null);
+  const realIntData = allWeeks.map(w => ws.includes(w) ? realInts[ws.indexOf(w)] : null);
+  const planVolData = allWeeks.map(w => {
+    const pw = planned.find(p=>p.week===w);
+    return pw ? pw.targetVol : null;
+  });
+  const planIntData = allWeeks.map(w => {
+    const pw = planned.find(p=>p.week===w);
+    return pw ? pw.targetInt : null;
+  });
+
+  // Normalise volume for overlay (real + planned together)
+  const allVols = [...realVolData,...planVolData].filter(v=>v!=null);
+  const maxVol  = Math.max(...allVols, 1);
+  const realVolPct = realVolData.map(v=>v!=null?Math.round((v/maxVol)*100):null);
+  const planVolPct = planVolData.map(v=>v!=null?Math.round((v/maxVol)*100):null);
+
+  // Phase colours
+  const phaseColors = { accumulation:'#3A86D4', intensification:'#5EC08A', realization:'#C9A84C', deload:'#888888' };
+
+  // Timeline strip
+  const tl = allWeeks.map(w => {
+    const wd = ws.includes(w) ? getWeek(w) : null;
+    const pw = planned.find(p=>p.week===w);
+    const phase = wd?.phase || pw?.phase;
+    const color = w===compWeek ? '#F2D98A' : (phaseColors[phase]||'#555');
+    const bg    = w===compWeek ? 'rgba(201,168,76,0.25)' : (wd ? `${phaseColors[phase]||'#555'}22` : 'rgba(80,80,80,0.08)');
+    const lbl   = w===compWeek ? '🏆' : (phase==='deload'?'↓':(!wd&&pw?'…':''));
+    const border= w===compWeek ? '1px solid rgba(201,168,76,0.6)' : (pw&&!wd?'1px dashed #444':'1px solid transparent');
+    return `<div class="tl-week" style="background:${bg};color:${color};border:${border};opacity:${wd?1:0.7};" title="Week ${w}${phase?' — '+(PHASES[phase]||phase):''}${!wd?' (planned)':''}">
+      <div style="font-size:12px;">${lbl||'·'}</div><div>W${w}</div></div>`;
+  }).join('');
+  const strip = document.getElementById('timeline-strip');
+  if (strip) strip.innerHTML = tl;
+
+  // Destroy old
+  ['peakOverlayChart'].forEach(id=>{
+    const key='peak_'+id;
+    if(charts[pid]&&charts[pid][key]){charts[pid][key].destroy();delete charts[pid][key];}
+  });
   if(!charts[pid]) charts[pid]={};
-  charts[pid].peak=new Chart(document.getElementById('peakChart'),{
-    type:'line',
-    data:{labels,datasets:[
-      {label:'Volume %',data:labels.map((_,i)=>vC(i+1)),borderColor:'#3A86D4',backgroundColor:'rgba(58,134,212,0.1)',fill:true,tension:0.4,pointBackgroundColor:'#3A86D4',pointRadius:4,yAxisID:'y'},
-      {label:'Intensity %',data:labels.map((_,i)=>iC(i+1)),borderColor:_theme.accent,backgroundColor:hexToRgba(_theme.accent,0.05),fill:false,tension:0.4,pointBackgroundColor:_theme.accent,pointRadius:4,borderDash:[5,3],yAxisID:'y2'}
+
+  const gc = 'rgba(255,255,255,0.05)', tc = '#888';
+
+  // Annotation line for comp week
+  const compIdx = allWeeks.indexOf(compWeek);
+
+  charts[pid].peak_peakOverlayChart = new Chart(document.getElementById('peakOverlayChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      // Real volume — solid blue
+      { label:'Volume (logged)', data:realVolPct, borderColor:'#3A86D4', backgroundColor:'rgba(58,134,212,0.12)',
+        fill:true, tension:0.35, pointBackgroundColor:allWeeks.map(w=>w===compWeek?'#F2D98A':'#3A86D4'),
+        pointRadius:allWeeks.map(w=>ws.includes(w)?4:0), pointHoverRadius:6,
+        borderWidth:2, spanGaps:false, yAxisID:'y' },
+      // Planned volume — dashed blue
+      { label:'Volume (planned)', data:planVolPct, borderColor:'#3A86D4', backgroundColor:'transparent',
+        fill:false, tension:0.35, borderDash:[6,4], borderWidth:2,
+        pointBackgroundColor:'#3A86D4', pointRadius:allWeeks.map(w=>planned.find(p=>p.week===w)?5:0),
+        pointBorderColor:'#0E0E0E', pointBorderWidth:2, spanGaps:false, yAxisID:'y' },
+      // Real intensity — solid gold
+      { label:'Intensity (logged)', data:realIntData, borderColor:'#C9A84C', backgroundColor:'rgba(201,168,76,0.05)',
+        fill:false, tension:0.35, pointBackgroundColor:allWeeks.map(w=>w===compWeek?'#F2D98A':'#C9A84C'),
+        pointRadius:allWeeks.map(w=>ws.includes(w)?4:0), pointHoverRadius:6,
+        borderWidth:2, spanGaps:false, yAxisID:'y2' },
+      // Planned intensity — dashed gold
+      { label:'Intensity (planned)', data:planIntData, borderColor:'#C9A84C', backgroundColor:'transparent',
+        fill:false, tension:0.35, borderDash:[6,4], borderWidth:2,
+        pointBackgroundColor:'#C9A84C', pointRadius:allWeeks.map(w=>planned.find(p=>p.week===w)?5:0),
+        pointBorderColor:'#0E0E0E', pointBorderWidth:2, spanGaps:false, yAxisID:'y2' },
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ display:true, position:'top', labels:{ color:tc, boxWidth:14, font:{size:11},
+        filter: item => item.label && !item.label.includes('undefined') } },
+        tooltip:{ callbacks:{ label: ctx => {
+          if(ctx.parsed.y==null) return null;
+          if(ctx.dataset.yAxisID==='y') return `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}% of max vol`;
+          return `${ctx.dataset.label}: ${ctx.parsed.y}%`;
+        }}}
+      },
       scales:{
-        x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},
-        y:{min:0,max:115,ticks:{color:'#3A86D4',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Volume',color:'#3A86D4',font:{size:11}}},
-        y2:{position:'right',min:50,max:110,ticks:{color:_theme.accent,callback:v=>v+'%'},grid:{drawOnChartArea:false},title:{display:true,text:'Intensity',color:_theme.accent,font:{size:11}}}
-      }}
+        x:{ticks:{color:tc,autoSkip:false,maxRotation:0},grid:{color:gc}},
+        y:{min:0,max:110,ticks:{color:'#3A86D4',callback:v=>v+'%'},grid:{color:gc},
+           title:{display:true,text:'Volume %',color:'#3A86D4',font:{size:10}}},
+        y2:{position:'right',min:0,max:110,ticks:{color:'#C9A84C',callback:v=>v+'%'},
+            grid:{drawOnChartArea:false},title:{display:true,text:'Intensity %',color:'#C9A84C',font:{size:10}}}
+      }
+    }
   });
 }
 
@@ -1586,6 +1784,661 @@ function saveEditExercise(day, idx, section='main') {
 function closeModal(){document.getElementById('overlay').style.display='none';}
 
 // ═══════════════════════════════════════════════════
+//  ROSTER  (shared across all programs)
+// ═══════════════════════════════════════════════════
+const GIRLS_WC = ['101','110','119','129','139','154','169','183','199','UNL'];
+const BOYS_WC  = ['106','114','123','132','143','154','165','176','197','220','238','UNL'];
+const CORE_FIELDS = ['snatch','cj','bench']; // used in total calc — cannot be deleted
+
+// Roster lives at top level of state (not per-program)
+if (!state.roster) state.roster = { athletes:[], customFields:[] };
+
+const DEFAULT_ROSTER_FIELDS = [
+  {id:'snatch', label:'Snatch', type:'number', core:true},
+  {id:'cj',     label:'C&J',   type:'number', core:true},
+  {id:'bench',  label:'Bench', type:'number', core:true},
+  {id:'jerk',   label:'Jerk',  type:'number', core:false},
+  {id:'fsq',    label:'Front Squat', type:'number', core:false},
+  {id:'bsq',    label:'Back Squat',  type:'number', core:false},
+];
+
+function rosterFields() {
+  const base = DEFAULT_ROSTER_FIELDS.map(f=>({...f}));
+  const custom = (state.roster.customFields||[]);
+  return [...base, ...custom];
+}
+
+function athleteOlympicTotal(a) {
+  const s=a.snatch||0, c=a.cj||0;
+  return (s&&c) ? s+c : 0;
+}
+function athleteTraditionalTotal(a) {
+  const b=a.bench||0, c=a.cj||0;
+  return (b&&c) ? b+c : 0;
+}
+
+// Roster filter state
+let _rosterFilter = { gender:'', wc:'', team:'' };
+let _rosterSort   = { field:'name', dir:1 };
+
+function buildRosterHTML() {
+  const athletes = state.roster.athletes || [];
+  const fields   = rosterFields();
+
+  // Derive filter options
+  const genders = [...new Set(athletes.map(a=>a.gender).filter(Boolean))].sort();
+  const wcs     = [...new Set(athletes.map(a=>a.wc).filter(Boolean))].sort((a,b)=>{
+    if(a==='UNL') return 1; if(b==='UNL') return -1;
+    return parseInt(a)-parseInt(b);
+  });
+  const teams   = [...new Set(athletes.map(a=>a.team).filter(Boolean))].sort();
+
+  // Apply filters
+  let filtered = athletes.filter(a=>{
+    if(_rosterFilter.gender && a.gender!==_rosterFilter.gender) return false;
+    if(_rosterFilter.wc && a.wc!==_rosterFilter.wc) return false;
+    if(_rosterFilter.team && a.team!==_rosterFilter.team) return false;
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a,b)=>{
+    const sf=_rosterSort.field;
+    if(sf==='olympicTotal'){
+      return (athleteOlympicTotal(b)-athleteOlympicTotal(a))*_rosterSort.dir;
+    }
+    if(sf==='traditionalTotal'){
+      return (athleteTraditionalTotal(b)-athleteTraditionalTotal(a))*_rosterSort.dir;
+    }
+    const av=a[sf]||0, bv=b[sf]||0;
+    if(typeof av==='number') return (bv-av)*_rosterSort.dir;
+    return String(av).localeCompare(String(bv))*_rosterSort.dir;
+  });
+
+  function sortBtn(field, label) {
+    const active=_rosterSort.field===field;
+    const arrow=active?(_rosterSort.dir===1?'↓':'↑'):'';
+    return `<th onclick="rosterSortBy('${field}')" style="cursor:pointer;white-space:nowrap;padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${active?'var(--gold)':'var(--muted)'};text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">${label} ${arrow}</th>`;
+  }
+
+  const rows = filtered.length ? filtered.map((a,i)=>{
+    const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
+    const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${a[f.id]||'—'}</td>`).join('');
+    return `<tr style="border-bottom:1px solid var(--dark3);" onmouseenter="this.style.background='var(--dark2)'" onmouseleave="this.style.background=''">
+      <td style="padding:7px 10px;font-weight:500;">${a.name}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.gender||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.wc||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.gradYear||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.team||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:#C9A84C;font-weight:600;">${a.snatch||0}</td>
+      <td style="text-align:center;padding:7px 10px;color:#3A86D4;font-weight:600;">${a.cj||0}</td>
+      <td style="text-align:center;padding:7px 10px;color:#C06060;font-weight:600;">${a.bench||0}</td>
+      ${extraCells}
+      <td style="text-align:center;padding:7px 10px;color:#5EC08A;font-weight:700;">${ot||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:#A07FD4;font-weight:700;">${tt||'—'}</td>
+      <td style="padding:7px 8px;white-space:nowrap;">
+        <button onclick="openEditAthlete(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;">✏</button>
+        <button onclick="deleteAthlete(${i})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;">✕</button>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="99" style="padding:3rem;text-align:center;color:var(--muted);">No athletes match the current filter.</td></tr>`;
+
+  const extraHeaders = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>sortBtn(f.id,f.label)).join('');
+
+  return `
+    <div class="week-bar">
+      <div class="week-title">Athlete Roster</div>
+      <div style="flex:1;"></div>
+      <button onclick="openManageRosterFields()" class="btn btn-outline" style="font-size:13px;">⚙ Manage fields</button>
+      <button onclick="openAddAthlete()" class="btn btn-gold" style="font-size:13px;">+ Add athlete</button>
+      <span style="font-size:13px;color:var(--muted);margin-left:4px;">${athletes.length} athlete${athletes.length!==1?'s':''}</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.25rem;align-items:center;">
+      <select onchange="_rosterFilter.gender=this.value;renderMain()" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:5px 10px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="">All genders</option>
+        ${genders.map(g=>`<option value="${g}" ${_rosterFilter.gender===g?'selected':''}>${g}</option>`).join('')}
+      </select>
+      <select onchange="_rosterFilter.wc=this.value;renderMain()" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:5px 10px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="">All weight classes</option>
+        ${wcs.map(w=>`<option value="${w}" ${_rosterFilter.wc===w?'selected':''}>${w}</option>`).join('')}
+      </select>
+      <select onchange="_rosterFilter.team=this.value;renderMain()" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:5px 10px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="">Varsity &amp; JV</option>
+        ${teams.map(t=>`<option value="${t}" ${_rosterFilter.team===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <button onclick="exportRosterPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:auto;">⬇ Export roster PDF</button>
+    </div>
+    <div class="chart-card" style="padding:0;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:800px;">
+        <thead><tr>
+          ${sortBtn('name','Name')}
+          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Gender</th>
+          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">WT Class</th>
+          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Grad Year</th>
+          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Team</th>
+          ${sortBtn('snatch','Snatch')}
+          ${sortBtn('cj','C&J')}
+          ${sortBtn('bench','Bench')}
+          ${extraHeaders}
+          ${sortBtn('olympicTotal','Olympic Total')}
+          ${sortBtn('traditionalTotal','Traditional Total')}
+          <th style="padding:7px 8px;background:var(--dark2);border-bottom:1px solid var(--dark3);width:52px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function rosterSortBy(field) {
+  if(_rosterSort.field===field) _rosterSort.dir*=-1;
+  else { _rosterSort.field=field; _rosterSort.dir=1; }
+  renderMain();
+}
+
+function athleteFormHTML(a={}) {
+  const fields=rosterFields();
+  const girlsOpts=GIRLS_WC.map(w=>`<option value="${w}" ${a.wc===w&&a.gender==='Girls'?'selected':''}>${w}</option>`).join('');
+  const boysOpts=BOYS_WC.map(w=>`<option value="${w}" ${a.wc===w&&a.gender==='Boys'?'selected':''}>${w}</option>`).join('');
+  const extraFields=fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`
+    <div class="form-field"><label>${f.label}</label>
+      <input type="number" id="af-${f.id}" value="${a[f.id]||0}" min="0">
+    </div>`).join('');
+  return `
+    <div class="fg2">
+      <div class="form-field"><label>Name</label><input type="text" id="af-name" value="${a.name||''}" placeholder="Full name"></div>
+      <div class="form-field"><label>Gender</label>
+        <select id="af-gender" onchange="updateWCOpts(this.value)">
+          <option value="Girls" ${a.gender==='Girls'||!a.gender?'selected':''}>Girls</option>
+          <option value="Boys" ${a.gender==='Boys'?'selected':''}>Boys</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg2">
+      <div class="form-field"><label>Weight class</label>
+        <select id="af-wc">${a.gender==='Boys'?boysOpts:girlsOpts}</select>
+      </div>
+      <div class="form-field"><label>Grad year</label>
+        <input type="number" id="af-gradYear" value="${a.gradYear||new Date().getFullYear()+1}" min="2024" max="2035">
+      </div>
+    </div>
+    <div class="fg2">
+      <div class="form-field"><label>Team</label>
+        <select id="af-team">
+          <option value="Varsity" ${a.team==='Varsity'?'selected':''}>Varsity</option>
+          <option value="JV" ${a.team==='JV'?'selected':''}>JV</option>
+        </select>
+      </div>
+      <div class="form-field"><label></label></div>
+    </div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-top:4px;border-top:1px solid var(--dark3);">Maxes (lbs)</div>
+    <div class="fg3">
+      <div class="form-field"><label>Snatch</label><input type="number" id="af-snatch" value="${a.snatch||0}" min="0"></div>
+      <div class="form-field"><label>C&amp;J</label><input type="number" id="af-cj" value="${a.cj||0}" min="0"></div>
+      <div class="form-field"><label>Bench</label><input type="number" id="af-bench" value="${a.bench||0}" min="0"></div>
+    </div>
+    ${extraFields}
+    <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--muted);margin-top:4px;">
+      Olympic Total (auto): <strong style="color:#5EC08A;" id="ot-preview">${(a.snatch||0)+(a.cj||0)||'—'}</strong> &nbsp;·&nbsp;
+      Traditional Total (auto): <strong style="color:#A07FD4;" id="tt-preview">${(a.bench||0)+(a.cj||0)||'—'}</strong>
+    </div>`;
+}
+
+function updateWCOpts(gender) {
+  const sel=document.getElementById('af-wc'); if(!sel) return;
+  const opts=(gender==='Boys'?BOYS_WC:GIRLS_WC).map(w=>`<option value="${w}">${w}</option>`).join('');
+  sel.innerHTML=opts;
+}
+
+function openAddAthlete() {
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Add Athlete</h3>
+    ${athleteFormHTML()}
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveAthlete(-1)">Add athlete</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+  wireAthletePreview();
+}
+
+function openEditAthlete(idx) {
+  const a=state.roster.athletes[idx];
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Edit Athlete</h3>
+    ${athleteFormHTML(a)}
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveAthlete(${idx})">Save</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+  wireAthletePreview();
+}
+
+function wireAthletePreview() {
+  ['af-snatch','af-cj','af-bench'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.addEventListener('input',()=>{
+      const s=parseInt(document.getElementById('af-snatch')?.value)||0;
+      const c=parseInt(document.getElementById('af-cj')?.value)||0;
+      const b=parseInt(document.getElementById('af-bench')?.value)||0;
+      const ot=document.getElementById('ot-preview'); if(ot) ot.textContent=(s&&c)?s+c:'—';
+      const tt=document.getElementById('tt-preview'); if(tt) tt.textContent=(b&&c)?b+c:'—';
+    });
+  });
+}
+
+function saveAthlete(idx) {
+  const name=document.getElementById('af-name').value.trim();
+  if(!name){alert('Please enter athlete name.');return;}
+  const fields=rosterFields();
+  const a={
+    name,
+    gender: document.getElementById('af-gender').value,
+    wc:     document.getElementById('af-wc').value,
+    gradYear: parseInt(document.getElementById('af-gradYear').value)||0,
+    team:   document.getElementById('af-team').value,
+    snatch: parseInt(document.getElementById('af-snatch').value)||0,
+    cj:     parseInt(document.getElementById('af-cj').value)||0,
+    bench:  parseInt(document.getElementById('af-bench').value)||0,
+  };
+  fields.filter(f=>!CORE_FIELDS.includes(f.id)).forEach(f=>{
+    const el=document.getElementById('af-'+f.id);
+    a[f.id]=el?parseInt(el.value)||0:0;
+  });
+  if(!state.roster.athletes) state.roster.athletes=[];
+  if(idx===-1) state.roster.athletes.push(a);
+  else state.roster.athletes[idx]=a;
+  closeModal(); saveState(); renderMain();
+}
+
+function deleteAthlete(idx) {
+  if(!confirm('Remove this athlete from the roster?')) return;
+  state.roster.athletes.splice(idx,1);
+  saveState(); renderMain();
+}
+
+function openManageRosterFields() {
+  const allFields = rosterFields();
+  // Fixed system fields (not in rosterFields but always present)
+  const systemFields = [
+    {label:'Name', core:true, system:true},
+    {label:'Gender', core:true, system:true},
+    {label:'Weight Class', core:true, system:true},
+    {label:'Grad Year', core:true, system:true},
+    {label:'Team (Varsity/JV)', core:true, system:true},
+  ];
+  const systemRows = systemFields.map(f=>`
+    <tr style="border-bottom:1px solid var(--dark3);">
+      <td style="padding:7px 10px;font-size:13px;">${f.label}</td>
+      <td style="padding:7px 10px;text-align:center;"><span style="font-size:10px;background:var(--dark3);color:var(--muted);padding:2px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">SYSTEM</span></td>
+      <td style="padding:7px 8px;text-align:center;color:#555;">—</td>
+    </tr>`).join('');
+
+  const coreRows = [
+    {label:'Snatch', id:'snatch'}, {label:'C&J', id:'cj'}, {label:'Bench', id:'bench'},
+  ].map(f=>`
+    <tr style="border-bottom:1px solid var(--dark3);">
+      <td style="padding:7px 10px;font-size:13px;">${f.label}</td>
+      <td style="padding:7px 10px;text-align:center;"><span style="font-size:10px;background:rgba(201,168,76,0.15);color:var(--gold);padding:2px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">CORE</span></td>
+      <td style="padding:7px 8px;text-align:center;color:#555;" title="Core fields cannot be deleted">🔒</td>
+    </tr>`).join('');
+
+  const autoRows = [
+    {label:'Olympic Total (Snatch + C&J)', color:'#5EC08A'},
+    {label:'Traditional Total (Bench + C&J)', color:'#A07FD4'},
+  ].map(f=>`
+    <tr style="border-bottom:1px solid var(--dark3);">
+      <td style="padding:7px 10px;font-size:13px;color:${f.color};">${f.label}</td>
+      <td style="padding:7px 10px;text-align:center;"><span style="font-size:10px;background:rgba(94,192,138,0.1);color:#5EC08A;padding:2px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">AUTO</span></td>
+      <td style="padding:7px 8px;text-align:center;color:#555;">—</td>
+    </tr>`).join('');
+
+  const custom = state.roster.customFields || [];
+  const customRows = custom.length ? custom.map((f,i)=>`
+    <tr style="border-bottom:1px solid var(--dark3);">
+      <td style="padding:7px 10px;font-size:13px;">${f.label}</td>
+      <td style="padding:7px 10px;text-align:center;"><span style="font-size:10px;background:rgba(58,134,212,0.15);color:#3A86D4;padding:2px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">CUSTOM</span></td>
+      <td style="padding:7px 8px;text-align:center;">
+        <button onclick="deleteRosterField(${i})" style="background:none;border:none;cursor:pointer;color:#E07070;font-size:13px;padding:0 4px;" title="Delete field">✕</button>
+      </td>
+    </tr>`).join('') :
+    `<tr><td colspan="3" style="padding:8px 10px;font-size:12px;color:var(--muted);">No custom fields yet.</td></tr>`;
+
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Manage Roster Fields</h3>
+    <div class="chart-card" style="padding:0;overflow:hidden;margin-bottom:1rem;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--dark2);">
+            <th style="padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;">Field</th>
+            <th style="padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;">Type</th>
+            <th style="width:40px;padding:6px 8px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${systemRows}
+          ${coreRows}
+          ${autoRows}
+          ${customRows}
+        </tbody>
+      </table>
+    </div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Add custom field</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;">
+      <div class="form-field" style="flex:1;margin-bottom:0;"><label>Field name</label><input type="text" id="new-field-name" placeholder="e.g. Power Clean, Trap Bar Deadlift"></div>
+      <button class="btn btn-gold" onclick="addRosterField()" style="font-size:13px;">+ Add</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gold" onclick="closeModal();renderMain()">Done</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function addRosterField() {
+  const name=document.getElementById('new-field-name').value.trim();
+  if(!name) return;
+  if(!state.roster.customFields) state.roster.customFields=[];
+  const id='cf_'+Date.now();
+  state.roster.customFields.push({id, label:name, type:'number', core:false});
+  saveState(); openManageRosterFields();
+}
+
+function deleteRosterField(i) {
+  state.roster.customFields.splice(i,1);
+  saveState(); openManageRosterFields();
+}
+
+function exportRosterPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'pt', format:'letter' });
+  const PW=792, PH=612, ML=36, MR=36, MT=36;
+  const CW=PW-ML-MR;
+  const GOLD=[201,168,76], DARK=[26,26,26], MID=[120,120,120], BLACK=[17,17,17], LGRAY=[240,240,238];
+  const athletes=state.roster.athletes||[];
+  const fields=rosterFields();
+
+  doc.setFillColor(...GOLD); doc.rect(0,0,PW,5,'F');
+  doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.setTextColor(...BLACK);
+  doc.text('Athlete Roster', ML, 30);
+  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(...MID);
+  doc.text(`Generated ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}  ·  ${athletes.length} athletes`, ML, 44);
+  doc.setDrawColor(...GOLD); doc.setLineWidth(1); doc.line(ML,50,PW-MR,50);
+
+  let y=62;
+  const cols=['Name','Gender','WT Class','Grad','Team','Snatch','C&J','Bench',
+    ...fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>f.label),
+    'Olympic Total','Traditional Total'];
+  const colW=CW/cols.length;
+
+  // Header
+  doc.setFillColor(...DARK); doc.rect(ML,y,CW,16,'F');
+  doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...GOLD);
+  cols.forEach((c,i)=>doc.text(c.toUpperCase(),ML+i*colW+colW/2,y+11,{align:'center'}));
+  y+=16;
+
+  // Rows
+  athletes.forEach((a,ri)=>{
+    if(y>PH-50){ doc.addPage(); y=MT; }
+    if(ri%2===0){doc.setFillColor(245,245,243);doc.rect(ML,y,CW,14,'F');}
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...BLACK);
+    const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
+    const vals=[a.name,a.gender||'',a.wc||'',a.gradYear||'',a.team||'',
+      a.snatch||0,a.cj||0,a.bench||0,
+      ...fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>a[f.id]||0),
+      ot||'—',tt||'—'];
+    vals.forEach((v,i)=>doc.text(String(v),ML+i*colW+colW/2,y+10,{align:'center'}));
+    y+=14;
+  });
+  doc.save('Athlete_Roster.pdf');
+}
+
+// ═══════════════════════════════════════════════════
+//  TEMPLATES
+// ═══════════════════════════════════════════════════
+if (!state.templates) state.templates = [];
+
+function buildTemplatesHTML() {
+  const tpls = state.templates || [];
+  const cards = tpls.length ? tpls.map((t,i)=>{
+    const modeLabel = t.mode==='full' ? 'Full program' : 'Structure only';
+    const modeColor = t.mode==='full' ? '#5EC08A' : '#3A86D4';
+    return `<div class="chart-card" style="margin-bottom:1rem;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;">${t.name}</span>
+            <span style="font-size:10px;padding:2px 8px;border-radius:3px;background:${modeColor}22;color:${modeColor};font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">${modeLabel.toUpperCase()}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);">${t.weeks.length} week${t.weeks.length!==1?'s':''} · ${(t.trainingDays||[]).join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="applyTemplate(${i})" class="btn btn-gold" style="font-size:12px;padding:5px 12px;">Apply to program</button>
+          <button onclick="exportTemplate(${i})" class="btn btn-outline" style="font-size:12px;padding:5px 12px;">⬇ Export</button>
+          <button onclick="deleteTemplate(${i})" style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:4px;cursor:pointer;color:#E07070;font-size:12px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;" title="Delete template">🗑 Delete</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${t.weeks.map(w=>{
+          const pc={accumulation:'#3A86D4',intensification:'#5EC08A',realization:'#C9A84C',deload:'#888'}[w.phase]||'#888';
+          return `<div style="padding:3px 9px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;background:${pc}22;color:${pc};border:1px solid ${pc}44;">Wk ${w.weekNum} — ${PHASES[w.phase]||w.phase}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('') :
+    `<div class="empty-msg" style="padding:4rem;">No templates yet. Create one from a current program week or build one from scratch.</div>`;
+
+  return `
+    <div class="week-bar">
+      <div class="week-title">Program Templates</div>
+      <div style="flex:1;"></div>
+      <button onclick="openNewTemplate()" class="btn btn-gold" style="font-size:13px;">+ New template</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:1.5rem;">
+      <button onclick="openSaveAsTemplate()" class="btn btn-outline" style="font-size:13px;">💾 Save current program as template</button>
+      <button onclick="openImportTemplate()" class="btn btn-outline" style="font-size:13px;">📂 Import template</button>
+    </div>
+    ${cards}`;
+}
+
+function openNewTemplate() {
+  const ws=weekNums();
+  const next=ws.length?Math.max(...ws)+1:1;
+  document.getElementById('modal-body').innerHTML=`
+    <h3>New Template</h3>
+    <div class="form-field"><label>Template name</label><input type="text" id="tpl-name" placeholder="e.g. 8-Week Accumulation Block"></div>
+    <div class="fg2">
+      <div class="form-field"><label>Number of weeks</label><input type="number" id="tpl-nweeks" value="8" min="1" max="24" oninput="renderTemplateWeeks()"></div>
+      <div style="flex:1;"></div>
+    </div>
+    <div class="form-field"><label>Training days</label>
+      <div class="day-pill-row" id="tpl-days">
+        ${ALL_DAYS.map(d=>`<button class="day-pill ${['Monday','Tuesday','Wednesday','Friday'].includes(d)?'selected':''}" onclick="togglePill(this,'${d}')">${d}</button>`).join('')}
+      </div>
+    </div>
+    <div id="tpl-week-rows" style="max-height:260px;overflow-y:auto;border:1px solid var(--dark3);border-radius:4px;padding:8px;background:var(--dark2);"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveNewTemplate()">Create template</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+  renderTemplateWeeks();
+}
+
+function renderTemplateWeeks() {
+  const n=parseInt(document.getElementById('tpl-nweeks')?.value)||1;
+  const container=document.getElementById('tpl-week-rows'); if(!container) return;
+  container.innerHTML=Array.from({length:n},(_,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--dark3);">
+      <span style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;min-width:60px;">Week ${i+1}</span>
+      <select id="tpl-phase-${i}" style="flex:1;background:var(--dark);color:var(--white);border:1px solid var(--dark3);border-radius:3px;padding:4px 8px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="accumulation">Accumulation — 65–75%</option>
+        <option value="intensification">Intensification — 75–85%</option>
+        <option value="realization">Realization — 85–95%</option>
+        <option value="deload">Deload — recovery</option>
+      </select>
+    </div>`).join('');
+}
+
+function saveNewTemplate() {
+  const name=document.getElementById('tpl-name').value.trim();
+  if(!name){alert('Enter a template name.');return;}
+  const n=parseInt(document.getElementById('tpl-nweeks').value)||1;
+  const selectedDays=[...document.getElementById('tpl-days').querySelectorAll('.day-pill.selected')].map(b=>b.textContent);
+  const days=ALL_DAYS.filter(d=>selectedDays.includes(d));
+  if(!days.length){alert('Select at least one training day.');return;}
+  const weeks=Array.from({length:n},(_,i)=>({
+    weekNum:i+1,
+    phase:document.getElementById(`tpl-phase-${i}`)?.value||'accumulation',
+    days:{}
+  }));
+  if(!state.templates) state.templates=[];
+  state.templates.push({name, trainingDays:days, weeks, created:Date.now()});
+  closeModal(); saveState(); renderMain();
+}
+
+function openSaveAsTemplate() {
+  const p = prog();
+  const ws = weekNums();
+  if (!ws.length) { alert('This program has no weeks to save.'); return; }
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Save Program as Template</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">Save <strong style="color:var(--white);">${p?.name||'this program'}</strong> as a reusable template (${ws.length} week${ws.length!==1?'s':''}).</p>
+    <div class="form-field"><label>Template name</label><input type="text" id="tpl-save-name" value="${p?.name||''} Template"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--dark2);border:1px solid var(--dark3);border-radius:6px;cursor:pointer;">
+        <input type="radio" name="tpl-save-mode" value="structure" checked style="accent-color:var(--gold);margin-top:2px;">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;">Structure only</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">Saves week phases &amp; training days. No exercises — fill them in fresh each time.</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--dark2);border:1px solid var(--dark3);border-radius:6px;cursor:pointer;">
+        <input type="radio" name="tpl-save-mode" value="full" style="accent-color:var(--gold);margin-top:2px;">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;">Full program</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">Includes all exercises, sets, reps, %1RM, warmups, and coach notes. Apply and adjust from there.</div>
+        </div>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveProgramAsTemplate()">Save template</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function saveProgramAsTemplate() {
+  const name = document.getElementById('tpl-save-name').value.trim() || 'Program Template';
+  const mode = document.querySelector('input[name="tpl-save-mode"]:checked')?.value || 'structure';
+  const p = prog(); if (!p) return;
+  const ws = weekNums();
+
+  let weeks;
+  if (mode === 'full') {
+    // Deep copy all week data including exercises
+    weeks = ws.map(w => ({
+      weekNum: w,
+      phase: p.weeks[w]?.phase || 'accumulation',
+      note: p.weeks[w]?.note || '',
+      days: JSON.parse(JSON.stringify(p.weeks[w]?.days || {}))
+    }));
+  } else {
+    // Structure only — phases + empty day shells
+    weeks = ws.map(w => ({
+      weekNum: w,
+      phase: p.weeks[w]?.phase || 'accumulation',
+      note: '',
+      days: {}
+    }));
+  }
+
+  if (!state.templates) state.templates = [];
+  state.templates.push({
+    name,
+    mode,
+    trainingDays: [...p.trainingDays],
+    weeks,
+    created: Date.now()
+  });
+  closeModal();
+  saveState();
+  switchTab('templates');
+  renderMain();
+}
+
+function applyTemplate(idx) {
+  const tpl=state.templates[idx]; if(!tpl) return;
+  const p=prog(); if(!p) return;
+  const existingWks=weekNums();
+  const modeLabel = tpl.mode==='full' ? 'including all exercises' : 'week structure only (no exercises)';
+  if(!confirm(`Apply "${tpl.name}" to "${p.name}"?\n\nThis will add ${tpl.weeks.length} new week${tpl.weeks.length!==1?'s':''} (${modeLabel}) after any existing weeks. Existing weeks will not be changed.`)) return;
+  const startWk=existingWks.length?Math.max(...existingWks)+1:1;
+  if(tpl.trainingDays) p.trainingDays=tpl.trainingDays;
+  tpl.weeks.forEach((tw,i)=>{
+    const wNum=startWk+i;
+    let days={};
+    if(tpl.mode==='full' && tw.days && Object.keys(tw.days).length) {
+      // Deep copy exercises from template
+      days = JSON.parse(JSON.stringify(tw.days));
+    } else {
+      (tpl.trainingDays||p.trainingDays).forEach(d=>{
+        days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+      });
+    }
+    p.weeks[wNum]={note:tw.note||'',phase:tw.phase,days};
+  });
+  state.currentWeek=startWk;
+  state.activeTab='program';
+  saveState(); render();
+}
+
+function deleteTemplate(idx) {
+  if(!confirm('Delete this template?')) return;
+  state.templates.splice(idx,1);
+  saveState(); renderMain();
+}
+
+function exportTemplate(idx) {
+  const tpl=state.templates[idx]; if(!tpl) return;
+  const json=JSON.stringify({liftbuilder_template:true,...tpl},null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`${tpl.name.replace(/[^a-zA-Z0-9]/g,'_')}_template.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openImportTemplate() {
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Import Template</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">Import a template file exported from LiftBuilder.</p>
+    <div class="form-field"><label>Template file (.json)</label>
+      <input type="file" id="tpl-file" accept=".json" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:7px 11px;font-size:13px;width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="importTemplate()">Import</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function importTemplate() {
+  const file=document.getElementById('tpl-file')?.files[0];
+  if(!file){alert('Please select a file.');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.liftbuilder_template||!data.weeks){alert('Invalid template file.');return;}
+      if(!state.templates) state.templates=[];
+      state.templates.push({name:data.name||'Imported Template',trainingDays:data.trainingDays||[],weeks:data.weeks,created:Date.now()});
+      closeModal(); saveState(); renderMain();
+    }catch(err){alert('Could not parse template file.');}
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════
 //  PERSISTENCE  (localStorage)
 // ═══════════════════════════════════════════════════
 const STORAGE_KEY = 'liftbuilder_v1';
@@ -1595,7 +2448,9 @@ function saveState() {
     const payload = {
       activeProgId: state.activeProgId,
       activeOrg: state.activeOrg,
-      programs: state.programs
+      programs: state.programs,
+      roster: state.roster,
+      templates: state.templates,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     showSaveBadge();
@@ -1621,6 +2476,8 @@ function loadState() {
         const ws = Object.keys(state.programs[state.activeProgId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
         state.currentWeek = ws[0] || 1;
       }
+      if (payload.roster) state.roster = payload.roster;
+      if (payload.templates) state.templates = payload.templates;
       return true;
     }
   } catch(e) {
