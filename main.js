@@ -7,6 +7,7 @@ let mainWindow = null;
 // ── Auto-updater config ────────────────────────────────────────────────────
 autoUpdater.autoDownload = false;        // ask user before downloading
 autoUpdater.autoInstallOnAppQuit = true; // install on next quit if downloaded
+autoUpdater.verifyUpdateCodeSignature = false; // app is unsigned (no Apple Developer cert)
 
 autoUpdater.on('update-available', (info) => {
   mainWindow?.webContents.send('update-available', info.version);
