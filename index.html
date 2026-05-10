@@ -410,7 +410,7 @@ let _progSectionOpen = true;
 function renderSidebar() {
   const progs = Object.values(state.programs);
   const progItems = progs.map(p => `
-    <div class="prog-list-item ${p.id===state.activeProgId?'active':''}" onclick="switchProgram('${p.id}')">
+    <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
       <span class="pl-name">${p.name}</span>
       <span class="pl-actions">
         <button class="pl-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
@@ -428,6 +428,9 @@ function renderSidebar() {
       <button onclick="openNewProgram()" style="display:flex;align-items:center;gap:6px;padding:7px 1.25rem 7px 1.5rem;background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;width:100%;text-align:left;" onmouseenter="this.style.color='var(--gold)'" onmouseleave="this.style.color='var(--muted)'">+ New program</button>
     </div>
     <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
+    <div class="sidebar-section-label" style="padding-top:.5rem;">Tools</div>
+    <div class="nav-item ${state.activeTab==='roster'?'active':''}" onclick="switchTab('roster')"><span>👥</span> Roster</div>
+    <div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>
     <div style="flex:1;"></div>
     <div style="padding:.75rem 1.25rem;border-top:1px solid var(--dark3);">
       <button onclick="clearAllData()" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;width:100%;text-align:center;padding:3px;">Clear all data</button>
@@ -449,6 +452,8 @@ function renderMain() {
   if (state.activeTab==='program')   { area.innerHTML=buildProgramHTML(); }
   else if (state.activeTab==='volume')  { area.innerHTML=buildVolumeHTML(); initVolumeCharts(); }
   else if (state.activeTab==='peaking') { area.innerHTML=buildPeakingHTML(); initPeakingChart(); }
+  else if (state.activeTab==='roster')  { area.innerHTML=buildRosterHTML(); }
+  else if (state.activeTab==='templates') { area.innerHTML=buildTemplatesHTML(); }
   renderProgToolbar();
   renderHeader();
 }
