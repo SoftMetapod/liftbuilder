@@ -501,14 +501,19 @@ function buildProgramHTML() {
       const parts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${m.name}</span>`).join('');
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name||'Complex'}</span>${parts}`;
     } else if(ex.setGroups && ex.setGroups.length>1) {
-      const parts=ex.setGroups.map(sg=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;">${sg.sets}×${sg.reps}${sg.intensity>0?' @ '+sg.intensity+'%':' (BW)'}</span>`).join('');
+      const parts=ex.setGroups.map(sg=>{
+        const measure=ex.useTime?`${sg.seconds}s`:`${sg.reps}`;
+        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;">${sg.sets}×${measure}${sg.intensity>0?' @ '+sg.intensity+'%':' (BW)'}</span>`;
+      }).join('');
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name}</span>${parts}`;
     } else {
       nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}`;
     }
     const repsDisplay=ex.isComplex
       ?`<span title="Reps per set">${ex.repsPerSet}<span style="font-size:10px;color:var(--muted);"> /set</span></span>`
-      :(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:ex.reps);
+      :ex.useTime
+        ?(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:`<span style="color:var(--gold);">${ex.setGroups?.[0]?.seconds||ex.seconds||0}s</span>`)
+        :(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:ex.reps);
     const isWarmup=section==='warmup';
     const canUp=i>0, canDown=i<totalInSection-1;
     return `<tr class="${isWarmup?'warmup-ex-row':''}">
@@ -1465,7 +1470,8 @@ function saveNewWeek() {
 let _exMode = 'single'; // 'single' | 'complex'
 let _exSection = 'main'; // 'main' | 'warmup'
 let _movements = []; // [{name, reps, category}]
-let _setGroups = []; // [{sets, reps, intensity}] — for single exercises
+let _setGroups = []; // [{sets, reps, seconds, intensity}] — for single exercises
+let _useTime = false; // true = time-based exercise (seconds per set instead of reps)
 
 function openAddExercise(preDay, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd){openAddWeek();return;}
@@ -1473,7 +1479,8 @@ function openAddExercise(preDay, section='main') {
   const selDay=preDay&&days.includes(preDay)?preDay:days[0];
   _exMode='single';
   _exSection=section;
-  _setGroups=[{sets:3,reps:3,intensity:75}];
+  _useTime=false;
+  _setGroups=[{sets:3,reps:3,seconds:30,intensity:75}];
   _movements=[{name:'',reps:1,category:'snatch'},{name:'',reps:1,category:'other'}];
   document.getElementById('modal-body').innerHTML=`
     <h3>Add Exercise — Week ${state.currentWeek}</h3>
@@ -1519,12 +1526,15 @@ function switchExMode(mode) {
 function renderExModeBody() {
   const body=document.getElementById('ex-mode-body');
   if(_exMode==='single') {
-    if(!_setGroups.length) _setGroups=[{sets:3,reps:3,intensity:75}];
+    if(!_setGroups.length) _setGroups=[{sets:3,reps:3,seconds:30,intensity:75}];
     body.innerHTML=`
       <div class="form-field"><label>Exercise name</label><input type="text" id="m-name" placeholder="e.g. Back Squat" autofocus></div>
-      <label style="display:block;font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:600;">Set Groups</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
-        <span>Sets</span><span>Reps</span><span>%1RM (0=BW)</span><span></span>
+      <div style="display:flex;align-items:center;margin-bottom:8px;">
+        <label style="font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;margin:0;">Set Groups</label>
+        <div style="display:flex;align-items:center;gap:2px;margin-left:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;padding:2px;">
+          <button id="btn-measure-reps" onclick="_useTime=false;renderSetGroups()" style="background:${!_useTime?'var(--dark3)':'none'};border:none;cursor:pointer;color:${!_useTime?'var(--white)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Reps</button>
+          <button id="btn-measure-time" onclick="_useTime=true;renderSetGroups()" style="background:${_useTime?'var(--dark3)':'none'};border:none;cursor:pointer;color:${_useTime?'var(--gold)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Time</button>
+        </div>
       </div>
       <div id="set-groups-container"></div>
       <button class="complex-add-btn" onclick="addSetGroup()">+ Add set group</button>
@@ -1588,22 +1598,36 @@ function removeMovement(i) {
 function renderSetGroups() {
   const container=document.getElementById('set-groups-container');
   if(!container) return;
-  container.innerHTML=_setGroups.map((sg,i)=>`
+  // Update toggle button styles
+  const btnReps=document.getElementById('btn-measure-reps');
+  const btnTime=document.getElementById('btn-measure-time');
+  if(btnReps){btnReps.style.background=_useTime?'none':'var(--dark3)';btnReps.style.color=_useTime?'var(--muted)':'var(--white)';}
+  if(btnTime){btnTime.style.background=_useTime?'var(--dark3)':'none';btnTime.style.color=_useTime?'var(--gold)':'var(--muted)';}
+  const measureLabel=_useTime?'Seconds':'Reps';
+  const header=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
+    <span>Sets</span><span>${measureLabel}</span><span>%1RM (0=BW)</span><span></span>
+  </div>`;
+  const rows=_setGroups.map((sg,i)=>`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center;">
       <input type="number" value="${sg.sets}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
         oninput="_setGroups[${i}].sets=parseInt(this.value)||1;autoVol()">
-      <input type="number" value="${sg.reps}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
-        oninput="_setGroups[${i}].reps=parseInt(this.value)||1;autoVol()">
+      ${_useTime
+        ?`<input type="number" value="${sg.seconds||30}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
+            oninput="_setGroups[${i}].seconds=parseInt(this.value)||1;autoVol()">`
+        :`<input type="number" value="${sg.reps||1}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
+            oninput="_setGroups[${i}].reps=parseInt(this.value)||1;autoVol()">`
+      }
       <input type="number" value="${sg.intensity}" min="0" max="115" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
         oninput="_setGroups[${i}].intensity=parseInt(this.value)||0">
       ${_setGroups.length>1?`<button class="complex-remove-btn" onclick="removeSetGroup(${i})">✕</button>`:'<div></div>'}
     </div>`).join('');
+  container.innerHTML=header+rows;
   autoVol();
 }
 
 function addSetGroup() {
-  const last=_setGroups[_setGroups.length-1]||{sets:1,reps:3,intensity:75};
-  _setGroups.push({sets:last.sets,reps:last.reps,intensity:last.intensity});
+  const last=_setGroups[_setGroups.length-1]||{sets:1,reps:3,seconds:30,intensity:75};
+  _setGroups.push({sets:last.sets,reps:last.reps,seconds:last.seconds||30,intensity:last.intensity});
   renderSetGroups();
 }
 
@@ -1629,10 +1653,16 @@ function updateComplexVol() {
 }
 
 function autoVol() {
-  const total=_setGroups.reduce((s,sg)=>s+(sg.sets||0)*(sg.reps||0),0);
   const totalSets=_setGroups.reduce((s,sg)=>s+(sg.sets||0),0);
   const el=document.getElementById('vol-preview-val');
-  if(el) el.textContent=`${total} reps (${totalSets} set${totalSets!==1?'s':''})`;
+  if(!el) return;
+  if(_useTime) {
+    const totalSecs=_setGroups.reduce((s,sg)=>s+(sg.sets||0)*(sg.seconds||0),0);
+    el.textContent=`${totalSecs}s total (${totalSets} set${totalSets!==1?'s':''})`;
+  } else {
+    const total=_setGroups.reduce((s,sg)=>s+(sg.sets||0)*(sg.reps||0),0);
+    el.textContent=`${total} reps (${totalSets} set${totalSets!==1?'s':''})`;
+  }
 }
 
 function saveExercise() {
@@ -1666,12 +1696,17 @@ function saveExercise() {
   } else {
     const name=document.getElementById('m-name').value.trim();
     if(!name){alert('Please enter an exercise name.');return;}
-    const groups=_setGroups.map(sg=>({sets:parseInt(sg.sets)||1,reps:parseInt(sg.reps)||1,intensity:parseInt(sg.intensity)||0}));
-    const volume=groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    const groups=_setGroups.map(sg=>({
+      sets:parseInt(sg.sets)||1,
+      reps:_useTime?0:(parseInt(sg.reps)||1),
+      seconds:_useTime?(parseInt(sg.seconds)||30):0,
+      intensity:parseInt(sg.intensity)||0
+    }));
     const totalSets=groups.reduce((s,sg)=>s+sg.sets,0);
     const wInt=groups.reduce((s,sg)=>s+sg.intensity*sg.sets,0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
-    ex={name,isComplex:false,setGroups:groups,sets:totalSets,reps:groups[0]?.reps||0,intensity:avgIntensity,volume,category};
+    const volume=_useTime?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    ex={name,isComplex:false,useTime:_useTime,setGroups:groups,sets:totalSets,reps:_useTime?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
   }
 
   if(_exSection==='warmup') {
@@ -1694,11 +1729,12 @@ function openEditExercise(day, idx, section='main') {
   _exSection=section;
 
   _exMode=ex.isComplex?'complex':'single';
+  _useTime=ex.useTime||false;
   _movements=ex.isComplex
     ? ex.movements.map(m=>({name:m.name,reps:m.reps,category:m.category||'other'}))
     : [{name:'',reps:1,category:'other'}];
   _setGroups=ex.isComplex?[]
-    :(ex.setGroups?ex.setGroups.map(sg=>({...sg})):[{sets:ex.sets||1,reps:ex.reps||1,intensity:ex.intensity||0}]);
+    :(ex.setGroups?ex.setGroups.map(sg=>({...sg})):[{sets:ex.sets||1,reps:ex.reps||1,seconds:ex.seconds||30,intensity:ex.intensity||0}]);
 
   document.getElementById('modal-body').innerHTML=`
     <h3>Edit Exercise</h3>
@@ -1761,12 +1797,17 @@ function saveEditExercise(day, idx, section='main') {
   } else {
     const name=document.getElementById('m-name').value.trim();
     if(!name){alert('Please enter an exercise name.');return;}
-    const groups=_setGroups.map(sg=>({sets:parseInt(sg.sets)||1,reps:parseInt(sg.reps)||1,intensity:parseInt(sg.intensity)||0}));
-    const volume=groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    const groups=_setGroups.map(sg=>({
+      sets:parseInt(sg.sets)||1,
+      reps:_useTime?0:(parseInt(sg.reps)||1),
+      seconds:_useTime?(parseInt(sg.seconds)||30):0,
+      intensity:parseInt(sg.intensity)||0
+    }));
     const totalSets=groups.reduce((s,sg)=>s+sg.sets,0);
     const wInt=groups.reduce((s,sg)=>s+sg.intensity*sg.sets,0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
-    ex={name,isComplex:false,setGroups:groups,sets:totalSets,reps:groups[0]?.reps||0,intensity:avgIntensity,volume,category};
+    const volume=_useTime?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    ex={name,isComplex:false,useTime:_useTime,setGroups:groups,sets:totalSets,reps:_useTime?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
   }
 
   // Remove from source array
