@@ -104,7 +104,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .ex-table tr:last-child td{border-bottom:none;}
 .ex-table td:not(:first-child){text-align:center;color:var(--muted);}
 .cat-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle;}
-.cat-snatch{background:#C9A84C;}.cat-clean{background:#3A86D4;}.cat-squat{background:#5EC08A;}
+.cat-snatch{background:#C9A84C;}.cat-clean{background:#3A86D4;}.cat-jerk{background:#6AAEF5;}.cat-cj{background:#2060B8;}.cat-squat{background:#5EC08A;}
 .cat-bench{background:#C06060;}.cat-accessory{background:#888;}.cat-plyo{background:#A07FD4;}
 .cat-core{background:#D48A50;}.cat-other{background:#444;}
 .vol-pill{display:inline-block;padding:1px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;background:var(--gold-a10);color:var(--gold);}
@@ -179,6 +179,34 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .complex-remove-btn:hover{color:#E07070;}
 .vol-preview{background:var(--gold-a08);border:1px solid var(--gold-a20);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--gold-light);margin-top:.5rem;display:flex;justify-content:space-between;align-items:center;}
 .vol-preview strong{font-family:'Barlow Condensed',sans-serif;font-size:16px;color:var(--gold);}
+
+/* ── Scheme badges & selector ── */
+.scheme-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;padding:1px 5px;border-radius:2px;letter-spacing:.5px;vertical-align:middle;margin-left:5px;}
+.scheme-badge.amrap{background:rgba(232,82,82,0.15);color:#E85252;border:1px solid rgba(232,82,82,0.3);}
+.scheme-badge.heavy-single{background:var(--gold-a15);color:var(--gold);border:1px solid var(--gold-a30);}
+.scheme-badge.ladder{background:rgba(100,200,100,0.12);color:#7DC87D;border:1px solid rgba(100,200,100,0.25);}
+.top-set-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;padding:0px 4px;border-radius:2px;letter-spacing:.4px;background:var(--gold-a15);color:var(--gold);border:1px solid var(--gold-a30);}
+.ex-note{display:block;font-size:10px;color:var(--muted);font-style:italic;padding-left:12px;margin-top:1px;line-height:1.4;}
+/* ── Exercise Library ── */
+.lib-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:4px;border:1px solid var(--dark3);margin-bottom:5px;cursor:pointer;transition:border-color .1s;}
+.lib-item:hover{border-color:var(--gold);background:var(--gold-a08);}
+.lib-item-meta{flex:1;min-width:0;}
+.lib-item-name{font-size:13px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lib-item-sub{font-size:11px;color:var(--muted);}
+/* ── Multi-week Calendar ── */
+.cal-week-card{background:var(--dark1);border:1px solid var(--dark3);border-radius:6px;margin-bottom:10px;overflow:hidden;}
+.cal-week-card.active{border-color:var(--gold-a30);}
+.cal-week-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--dark2);border-bottom:1px solid var(--dark3);}
+.scheme-selector{display:flex;gap:4px;margin-top:.75rem;}
+.scheme-btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:4px 8px;border-radius:3px;border:1px solid var(--dark3);cursor:pointer;background:var(--dark2);color:var(--muted);transition:all 0.1s;flex:1;text-align:center;}
+.scheme-btn.active{background:var(--gold-a15);border-color:var(--gold);color:var(--gold);}
+.scheme-btn.active.s-amrap{background:rgba(232,82,82,0.12);border-color:rgba(232,82,82,0.4);color:#E85252;}
+.scheme-btn.active.s-heavy{background:var(--gold-a15);border-color:var(--gold);color:var(--gold);}
+.scheme-btn.active.s-ladder{background:rgba(100,200,100,0.12);border-color:rgba(100,200,100,0.35);color:#7DC87D;}
+/* ── Superset modal rows ── */
+.superset-ex{display:grid;grid-template-columns:22px 1fr 100px 60px 60px 28px;gap:5px;align-items:center;margin-bottom:6px;padding:7px 8px;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;}
+.superset-ex input,.superset-ex select{background:var(--black);border:1px solid var(--dark3);border-radius:3px;padding:4px 6px;font-size:13px;color:var(--white);font-family:'Barlow',sans-serif;width:100%;}
+.superset-ex input:focus,.superset-ex select:focus{outline:none;border-color:var(--gold);}
 
 /* ── Warm-up section ── */
 .warmup-section{border-bottom:2px solid var(--dark3);}
@@ -255,7 +283,9 @@ const ALL_DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','S
 const PHASES={accumulation:'Accumulation',intensification:'Intensification',realization:'Realization',deload:'Deload'};
 const CAT_META={
   snatch:   {label:'Snatch',    color:'#C9A84C'},
-  clean:    {label:'Clean/Jerk',color:'#3A86D4'},
+  clean:    {label:'Clean',        color:'#3A86D4'},
+  jerk:     {label:'Jerk',          color:'#6AAEF5'},
+  cj:       {label:'Clean & Jerk', color:'#2060B8'},
   squat:    {label:'Squat',     color:'#5EC08A'},
   bench:    {label:'Bench',     color:'#C06060'},
   accessory:{label:'Accessory', color:'#888888'},
@@ -274,7 +304,8 @@ let state = {
   volWeek: null,
   programs: {},
   roster: { athletes: [], customFields: [] },
-  templates: []
+  templates: [],
+  exerciseLibrary: []
 };
 
 // ═══════════════════════════════════════════════════
@@ -410,7 +441,7 @@ let _progSectionOpen = true;
 function renderSidebar() {
   const progs = Object.values(state.programs);
   const progItems = progs.map(p => `
-    <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
+    <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking','calendar'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
       <span class="pl-name">${p.name}</span>
       <span class="pl-actions">
         <button class="pl-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
@@ -431,6 +462,8 @@ function renderSidebar() {
     <div class="sidebar-section-label" style="padding-top:.5rem;">Tools</div>
     <div class="nav-item ${state.activeTab==='roster'?'active':''}" onclick="switchTab('roster')"><span>👥</span> Roster</div>
     <div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>
+    <div class="nav-item ${state.activeTab==='library'?'active':''}" onclick="switchTab('library')"><span>📚</span> Exercise Library</div>
+    <div class="nav-item ${state.activeTab==='calendar'?'active':''}" onclick="switchTab('calendar')"><span>📅</span> Calendar</div>
     <div style="flex:1;"></div>
     <div style="padding:.75rem 1.25rem;border-top:1px solid var(--dark3);">
       <button onclick="clearAllData()" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;width:100%;text-align:center;padding:3px;">Clear all data</button>
@@ -454,6 +487,8 @@ function renderMain() {
   else if (state.activeTab==='peaking') { area.innerHTML=buildPeakingHTML(); initPeakingChart(); }
   else if (state.activeTab==='roster')  { area.innerHTML=buildRosterHTML(); }
   else if (state.activeTab==='templates') { area.innerHTML=buildTemplatesHTML(); }
+  else if (state.activeTab==='library') { area.innerHTML=buildLibraryHTML(); }
+  else if (state.activeTab==='calendar') { area.innerHTML=buildCalendarHTML(); }
   renderProgToolbar();
   renderHeader();
 }
@@ -495,9 +530,18 @@ function buildProgramHTML() {
   const noteHTML=wd&&wd.note?`<div class="note-bar">📌 <span>${wd.note}</span></div>`:'';
   const ws=weekNums();
 
+  function fmtPct(lo, hi) { if(lo<=0&&(!hi||hi<=0)) return '—'; if(hi>lo) return `${lo}–${hi}%`; return lo>0?`${lo}%`:'—'; }
   function exRow(ex, i, section, totalInSection) {
+    const LETTERS=['A','B','C','D'];
     let nameCell;
-    if(ex.isComplex && ex.movements && ex.movements.length){
+    if(ex.isSuperset && ex.supersetExercises) {
+      const parts=ex.supersetExercises.map((se,si)=>{
+        const pct=fmtPct(se.intensity||0,se.intensityHigh||0);
+        const measure=se.useTime?`${se.seconds||0}s`:`${se.reps||0} reps`;
+        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span style="color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;">${LETTERS[si]}.</span> ${se.name} — ${measure} @ ${pct}</span>`;
+      }).join('');
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);">SUPERSET</span>${parts}`;
+    } else if(ex.isComplex && ex.movements && ex.movements.length){
       const movParts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${m.name}</span>`).join('');
       let groupParts='';
       if(ex.complexGroups&&ex.complexGroups.length>1){
@@ -505,22 +549,44 @@ function buildProgramHTML() {
       }
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name||'Complex'}</span>${movParts}${groupParts}`;
     } else if(ex.setGroups && ex.setGroups.length>1) {
-      const parts=ex.setGroups.map(sg=>{
-        const measure=ex.useTime?`${sg.seconds}s`:`${sg.reps}`;
-        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;">${sg.sets}×${measure}${sg.intensity>0?' @ '+sg.intensity+'%':' (BW)'}</span>`;
+      const isLadder=ex.scheme==='ladder';
+      const parts=ex.setGroups.map((sg,si)=>{
+        const measure=ex.useTime?`${sg.seconds}s`:ex.useRPE?`${sg.reps}`:`${sg.reps}`;
+        const intensity=ex.useRPE?`<span style="color:#E85252;">RPE ${sg.rpe||8}</span>`:fmtPct(sg.intensity||0,sg.intensityHigh||0);
+        const isTop=isLadder&&si===ex.setGroups.length-1;
+        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;">${sg.sets}×${measure} @ ${intensity}${isTop?` <span class="top-set-badge">TOP</span>`:''}</span>`;
       }).join('');
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name}</span>${parts}`;
+      const schemeBadge=ex.scheme&&ex.scheme!=='normal'?`<span class="scheme-badge ${ex.scheme==='amrap'?'amrap':ex.scheme==='heavy_single'?'heavy-single':'ladder'}">${ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY SINGLE':'LADDER'}</span>`:'';
+      const rpeBadge=ex.useRPE?`<span class="scheme-badge amrap">RPE</span>`:'';
+      const noteEl=ex.note?`<span class="ex-note">${ex.note}</span>`:'';
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name}</span>${schemeBadge}${rpeBadge}${noteEl}${parts}`;
     } else {
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}`;
+      const schemeBadge=ex.scheme&&ex.scheme!=='normal'?`<span class="scheme-badge ${ex.scheme==='amrap'?'amrap':ex.scheme==='heavy_single'?'heavy-single':'ladder'}">${ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY SINGLE':'LADDER'}</span>`:'';
+      const rpeBadge=ex.useRPE?`<span class="scheme-badge amrap">RPE</span>`:'';
+      const noteEl=ex.note?`<span class="ex-note">${ex.note}</span>`:'';
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}${schemeBadge}${rpeBadge}${noteEl}`;
     }
-    const repsDisplay=ex.isComplex
-      ?`<span title="Reps per set">${ex.repsPerSet}<span style="font-size:10px;color:var(--muted);"> /set</span></span>`
-      :ex.useTime
-        ?(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:`<span style="color:var(--gold);">${ex.setGroups?.[0]?.seconds||ex.seconds||0}s</span>`)
-        :(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:ex.reps);
+    const isAMRAP=ex.scheme==='amrap';
+    const isHeavySingle=ex.scheme==='heavy_single';
+    const sg0=ex.setGroups?.[0];
+    const repsDisplay=ex.isSuperset
+      ?`<span style="font-size:10px;color:var(--muted);">each</span>`
+      :ex.isComplex
+        ?`<span title="Reps per set">${ex.repsPerSet}<span style="font-size:10px;color:var(--muted);"> /set</span></span>`
+        :isHeavySingle?`<span style="font-size:10px;color:var(--gold);">max</span>`
+        :ex.useTime
+          ?(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:`<span style="color:var(--gold);">${sg0?.seconds||ex.seconds||0}s</span>`)
+          :(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
+            :(isAMRAP?`${ex.reps}<span style="color:#E85252;font-weight:700;">+</span>`:`${ex.reps}`));
+    const pctDisplay=ex.isSuperset?`<span style="font-size:10px;color:var(--muted);">—</span>`
+      :ex.isComplex&&ex.complexGroups&&ex.complexGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
+      :isHeavySingle?`<span style="font-size:10px;color:var(--gold);">build</span>`
+      :ex.useRPE?(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:`<span style="color:#E85252;">RPE ${sg0?.rpe||8}</span>`)
+      :ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
+      :fmtPct(sg0?.intensity||ex.intensity||0,sg0?.intensityHigh||0);
     const isWarmup=section==='warmup';
     const canUp=i>0, canDown=i<totalInSection-1;
-    return `<tr class="${isWarmup?'warmup-ex-row':''}">
+    return `<tr class="${isWarmup?'warmup-ex-row':''}${ex.isSuperset?' superset-row':''}">
       <td style="width:24px;padding:2px 3px;">
         <div style="display:flex;flex-direction:column;gap:1px;align-items:center;">
           <button onclick="moveExercise('${ex._day}','${section}',${i},'up')" style="background:none;border:none;cursor:${canUp?'pointer':'default'};color:${canUp?'#666':'#2a2a2a'};font-size:10px;padding:0;line-height:1;" ${canUp?'':'disabled'}>▲</button>
@@ -529,7 +595,7 @@ function buildProgramHTML() {
       </td>
       <td style="color:${isWarmup?'var(--muted)':'var(--white)'};">${nameCell}</td>
       <td>${ex.sets}</td><td>${repsDisplay}</td>
-      <td>${ex.isComplex&&ex.complexGroups&&ex.complexGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:(ex.intensity>0?ex.intensity+'%':'—')}</td>
+      <td>${pctDisplay}</td>
       ${!isWarmup?`<td><span class="vol-pill">${ex.volume}</span></td>`:`<td style="color:var(--muted);font-size:11px;">warm-up</td>`}
       <td style="white-space:nowrap;">
         <button onclick="openEditExercise('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;" title="Edit">✏</button>
@@ -709,7 +775,7 @@ function initVolumeCharts() {
   document.getElementById('vol-metrics').innerHTML=`
     <div class="metric-card"><div class="metric-label">Total volume</div><div class="metric-value">${lv}</div><div class="metric-sub">reps — week ${vw}${prevW!=null?` <span class="${diffCls}">(${diffStr} vs wk ${prevW})</span>`:''}</div></div>
     <div class="metric-card"><div class="metric-label">Snatch vol</div><div class="metric-value" style="color:#C9A84C;">${cats['snatch']||0}</div><div class="metric-sub">reps — week ${vw}</div></div>
-    <div class="metric-card"><div class="metric-label">Clean/Jerk vol</div><div class="metric-value" style="color:#3A86D4;">${cats['clean']||0}</div><div class="metric-sub">reps — week ${vw}</div></div>
+    <div class="metric-card"><div class="metric-label">Clean/Jerk vol</div><div class="metric-value" style="color:#3A86D4;">${(cats['clean']||0)+(cats['jerk']||0)+(cats['cj']||0)}</div><div class="metric-sub">reps — week ${vw}</div></div>
     <div class="metric-card"><div class="metric-label">Bench vol</div><div class="metric-value" style="color:#C06060;">${cats['bench']||0}</div><div class="metric-sub">reps — week ${vw}</div></div>`;
 
   const activeCats=Object.keys(cats).filter(c=>cats[c]>0);
@@ -1021,7 +1087,7 @@ function buildPDF(weekNums, inclMobility) {
   const safeName = p.name.replace(/[^a-zA-Z0-9]/g, '_');
 
   const CAT_COLORS_RGB = {
-    snatch:    [201,168,76],  clean:    [58,134,212],
+    snatch:[201,168,76], clean:[58,134,212], jerk:[106,174,245], cj:[32,96,184],
     squat:     [94,192,138],  bench:    [192,96,96],
     accessory: [136,136,136], plyo:     [160,127,212],
     core:      [212,138,80],  other:    [80,80,80],
@@ -1117,6 +1183,7 @@ function buildPDF(weekNums, inclMobility) {
     const rowH = 18;
     const mobH = inclMob && dd.mobility ? Math.ceil(dd.mobility.length / 90) * 12 + 24 : 0;
     const blockH = 24 + dd.exercises.reduce((s, ex) => {
+      if (ex.isSuperset && ex.supersetExercises) return s + rowH + (ex.supersetExercises.length - 1) * 12 + 4;
       if (ex.isComplex && ex.movements) return s + rowH + ex.movements.length * 12 + 4;
       if (!ex.isComplex && ex.setGroups && ex.setGroups.length > 1) return s + rowH + (ex.setGroups.length - 1) * 12 + 4;
       return s + rowH;
@@ -1151,10 +1218,47 @@ function buildPDF(weekNums, inclMobility) {
     doc.text('%1RM', cols.pct + 30, y + 10, { align: 'center' });
     y += 14;
 
+    const pdfPct = (lo, hi) => { if(lo<=0&&(!hi||hi<=0)) return '—'; if(hi>lo) return `${lo}-${hi}%`; return lo>0?`${lo}%`:'—'; };
     // Rows
     dd.exercises.forEach((ex, idx) => {
       const isEven = idx % 2 === 0;
-      if (ex.isComplex && ex.movements && ex.movements.length) {
+      if (ex.isSuperset && ex.supersetExercises && ex.supersetExercises.length) {
+        const LTRS=['A','B','C','D'];
+        const exH = rowH + (ex.supersetExercises.length - 1) * 12;
+        checkPage(exH + 6);
+        if (isEven) { doc.setFillColor(248, 250, 253); doc.rect(ML, y, CW, exH, 'F'); }
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(100, 130, 180);
+        doc.text('SUPERSET', cols.ex + 4, y + 10);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...MID);
+        doc.text(String(ex.sets), cols.sets, y + 11, { align: 'center' });
+        doc.text('each', cols.reps, y + 11, { align: 'center' });
+        ex.supersetExercises.forEach((se, si) => {
+          const seY = y + (si === 0 ? rowH : rowH + si * 12);
+          checkPage(14);
+          const catRGB = CAT_COLORS_RGB[se.category] || [120,120,120];
+          doc.setFillColor(...catRGB);
+          doc.setLineWidth(1.5);
+          doc.setDrawColor(...catRGB);
+          doc.line(cols.ex + 10, seY + 3, cols.ex + 10, seY + 10);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(180, 145, 40);
+          doc.text(LTRS[si]+'.', cols.ex + 13, seY + 10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(60, 60, 60);
+          const measure = se.useTime ? `${se.seconds||0}s` : `${se.reps||0} reps`;
+          const pct = pdfPct(se.intensity||0, se.intensityHigh||0);
+          doc.text(`${se.name} — ${measure} @ ${pct}`, cols.ex + 22, seY + 10);
+        });
+        doc.setDrawColor(230, 230, 228);
+        doc.setLineWidth(0.3);
+        doc.line(ML, y + exH, PW - MR, y + exH);
+        y += exH;
+      } else if (ex.isComplex && ex.movements && ex.movements.length) {
         const exH = rowH + ex.movements.length * 12;
         checkPage(exH + 6);
         if (isEven) { doc.setFillColor(250, 250, 248); doc.rect(ML, y, CW, exH, 'F'); }
@@ -1207,10 +1311,13 @@ function buildPDF(weekNums, inclMobility) {
         ex.setGroups.forEach((sg, si) => {
           const sgY = y + rowH + si * 12;
           checkPage(14);
+          const isTop = ex.scheme==='ladder' && si===ex.setGroups.length-1;
           doc.setFontSize(8);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(80, 80, 80);
-          doc.text(`${sg.sets} set${sg.sets!==1?'s':''} × ${sg.reps} reps${sg.intensity>0?' @ '+sg.intensity+'%':' (BW)'}`, cols.ex + 16, sgY + 10);
+          doc.setFont('helvetica', isTop?'bold':'normal');
+          doc.setTextColor(isTop?100:80, isTop?80:80, isTop?20:80);
+          const pctTxt = pdfPct(sg.intensity||0, sg.intensityHigh||0);
+          const repsTxt = ex.useTime ? `${sg.seconds}s` : `${sg.reps} reps`;
+          doc.text(`${sg.sets} set${sg.sets!==1?'s':''} × ${repsTxt} @ ${pctTxt}${isTop?' [TOP SET]':''}`, cols.ex + 16, sgY + 10);
         });
         doc.setDrawColor(230, 230, 228);
         doc.setLineWidth(0.3);
@@ -1228,10 +1335,26 @@ function buildPDF(weekNums, inclMobility) {
         const maxW = cols.sets - cols.ex - 16;
         const lines = doc.splitTextToSize(ex.name, maxW);
         doc.text(lines[0], cols.ex + 12, y + 12);
+        if (ex.scheme && ex.scheme !== 'normal') {
+          const schTag = ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY SINGLE':'LADDER';
+          doc.setFontSize(6.5);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(ex.scheme==='amrap'?200:ex.scheme==='heavy_single'?180:80, ex.scheme==='amrap'?60:ex.scheme==='heavy_single'?145:160, ex.scheme==='amrap'?60:ex.scheme==='heavy_single'?20:80);
+          doc.text(schTag, cols.ex + 12, y + 16);
+        }
+        if (ex.note) {
+          doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(130,130,130);
+          doc.text(ex.note, cols.ex + 12, y + 16);
+        }
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
         doc.setTextColor(...MID);
         doc.text(String(ex.sets), cols.sets, y + 12, { align: 'center' });
-        doc.text(String(ex.reps), cols.reps, y + 12, { align: 'center' });
-        doc.text(ex.intensity > 0 ? `${ex.intensity}%` : '—', cols.pct + 30, y + 12, { align: 'center' });
+        const sg0 = ex.setGroups?.[0];
+        const pctStr = ex.scheme==='heavy_single'?'max':ex.useRPE?`RPE ${sg0?.rpe||8}`:pdfPct(sg0?.intensity||ex.intensity||0, sg0?.intensityHigh||0);
+        const repsStr = ex.scheme==='heavy_single'?'max':ex.useTime?`${sg0?.seconds||ex.seconds||0}s`:(ex.scheme==='amrap'?`${ex.reps}+`:String(ex.reps||'—'));
+        doc.text(repsStr, cols.reps, y + 12, { align: 'center' });
+        doc.text(pctStr, cols.pct + 30, y + 12, { align: 'center' });
         doc.setDrawColor(230, 230, 228);
         doc.setLineWidth(0.3);
         doc.line(ML, y + rowH, PW - MR, y + rowH);
@@ -1473,21 +1596,34 @@ function saveNewWeek() {
 // ═══════════════════════════════════════════════════
 let _exMode = 'single'; // 'single' | 'complex'
 let _exSection = 'main'; // 'main' | 'warmup'
+let _libraryMode = false; // true = modal is adding/editing a library entry (not a day's exercise)
+let _libraryEditIdx = -1; // index into state.exerciseLibrary when editing an existing entry
 let _movements = []; // [{name, reps, category}]
-let _setGroups = []; // [{sets, reps, seconds, intensity}] — for single exercises
+let _setGroups = []; // [{sets, reps, seconds, intensity, intensityHigh}] — for single exercises
 let _useTime = false; // true = time-based exercise (seconds per set instead of reps)
 let _complexGroups = []; // [{sets, intensity}] — set groups for complex exercises
+let _scheme = 'normal'; // 'normal' | 'ladder' | 'amrap' | 'heavy_single'
+let _supersetExercises = []; // [{name, category, reps, seconds, intensity, intensityHigh, useTime}]
+let _supersetSets = 3;
+let _exNote = ''; // coaching/technique cue for the exercise
+let _useRPE = false; // true = RPE-based intensity instead of %
 
 function openAddExercise(preDay, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd){openAddWeek();return;}
   const days=trainingDays();
   const selDay=preDay&&days.includes(preDay)?preDay:days[0];
+  _libraryMode=false; _libraryEditIdx=-1;
   _exMode='single';
   _exSection=section;
   _useTime=false;
-  _setGroups=[{sets:3,reps:3,seconds:30,intensity:75}];
+  _useRPE=false;
+  _exNote='';
+  _scheme='normal';
+  _setGroups=[{sets:3,reps:3,seconds:30,intensity:75,intensityHigh:0,rpe:8}];
   _complexGroups=[{sets:3,intensity:70}];
   _movements=[{name:'',reps:1,category:'snatch'},{name:'',reps:1,category:'other'}];
+  _supersetSets=3;
+  _supersetExercises=[{name:'',category:'squat',reps:5,seconds:30,intensity:75,intensityHigh:0,useTime:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false}];
   document.getElementById('modal-body').innerHTML=`
     <h3>Add Exercise — Week ${state.currentWeek}</h3>
     <div class="fg2" style="margin-bottom:.75rem;">
@@ -1502,50 +1638,156 @@ function openAddExercise(preDay, section='main') {
       </div>
     </div>
     <div class="form-field" style="margin-bottom:.75rem;"><label>Category</label>
-      <select id="m-cat">
-        <option value="snatch">Snatch</option><option value="clean">Clean / Jerk</option>
-        <option value="squat">Squat</option><option value="bench">Bench</option>
-        <option value="accessory">Accessory</option><option value="plyo">Plyo</option>
-        <option value="core">Core</option><option value="other">Other</option>
-      </select>
+      <select id="m-cat">${Object.entries(CAT_META).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select>
     </div>
     <div class="ex-type-tabs">
       <div class="ex-type-tab active" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
+      <div class="ex-type-tab" id="tab-superset" onclick="switchExMode('superset')">Superset</div>
       <div class="ex-type-tab" id="tab-complex" onclick="switchExMode('complex')">Complex</div>
     </div>
     <div id="ex-mode-body"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="saveExercise()">Add exercise</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" onclick="saveToLibraryFromModal()" title="Save this exercise to your global library for quick reuse" style="font-size:12px;">📚 Save to Library</button>
+        <button class="btn btn-gold" onclick="saveExercise()">Add exercise</button>
+      </div>
     </div>`;
   document.getElementById('overlay').style.display='flex';
   renderExModeBody();
 }
 
+function openAddToLibrary(editIdx=-1) {
+  _libraryMode=true; _libraryEditIdx=editIdx;
+  _exMode='single'; _useTime=false; _useRPE=false; _exNote=''; _scheme='normal';
+  _setGroups=[{sets:3,reps:3,seconds:30,intensity:75,intensityHigh:0,rpe:8}];
+  _supersetSets=3;
+  _supersetExercises=[{name:'',category:'squat',reps:5,seconds:30,intensity:75,intensityHigh:0,useTime:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false}];
+  const prefill=editIdx>=0?state.exerciseLibrary[editIdx]||{}:{};
+  if(editIdx>=0&&prefill.name){
+    _useTime=prefill.useTime||false; _useRPE=prefill.useRPE||false;
+    _scheme=prefill.scheme||'normal'; _exNote=prefill.note||'';
+    _setGroups=prefill.setGroups?prefill.setGroups.map(sg=>({...sg,rpe:sg.rpe||8})):[{sets:prefill.sets||3,reps:prefill.reps||5,seconds:prefill.seconds||30,intensity:prefill.intensity||0,intensityHigh:prefill.intensityHigh||0,rpe:prefill.rpe||8}];
+  }
+  document.getElementById('modal-body').innerHTML=`
+    <h3>${editIdx>=0?'Edit Library Exercise':'Add to Library'}</h3>
+    <div class="form-field" style="margin-bottom:.75rem;"><label>Category</label>
+      <select id="m-cat">${Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${prefill.category===k?' selected':''}>${v.label}</option>`).join('')}</select>
+    </div>
+    <div class="ex-type-tabs">
+      <div class="ex-type-tab active" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
+      <div class="ex-type-tab" id="tab-superset" onclick="switchExMode('superset')">Superset</div>
+      <div class="ex-type-tab" id="tab-complex" onclick="switchExMode('complex')">Complex</div>
+    </div>
+    <div id="ex-mode-body"></div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveToLibraryFromModal()">💾 ${editIdx>=0?'Update':'Save to Library'}</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+  renderExModeBody();
+  if(prefill.name){const nb=document.getElementById('m-name');if(nb) nb.value=prefill.name;}
+}
+
 function switchExMode(mode) {
   _exMode=mode;
   document.getElementById('tab-single').classList.toggle('active', mode==='single');
+  const ts=document.getElementById('tab-superset'); if(ts) ts.classList.toggle('active', mode==='superset');
   document.getElementById('tab-complex').classList.toggle('active', mode==='complex');
   renderExModeBody();
 }
 
+function schemeLabel(s){return s==='amrap'?'AMRAP':s==='heavy_single'?'Heavy Single':s==='ladder'?'Ladder':'Normal';}
+function renderSchemeSelector() {
+  const el=document.getElementById('scheme-selector'); if(!el) return;
+  ['normal','ladder','amrap','heavy_single'].forEach(s=>{
+    const btn=el.querySelector(`[data-scheme="${s}"]`);
+    if(!btn) return;
+    const cls=s==='amrap'?'s-amrap':s==='heavy_single'?'s-heavy':s==='ladder'?'s-ladder':'';
+    btn.className='scheme-btn'+(s===_scheme?' active'+(cls?' '+cls:''):'');
+  });
+  const hint=document.getElementById('scheme-hint'); if(!hint) return;
+  const hints={normal:'',ladder:'Athletes build up through ramp sets to a peak top set. The last set group is the "Top Set".',amrap:'The last set is taken to technical failure — reps shown are the minimum target.',heavy_single:'Athlete builds to a maximal single on this day. No fixed rep target.'};
+  hint.textContent=hints[_scheme]||'';
+}
+function renderLibraryQuickAdd() {
+  const el=document.getElementById('lib-quick-add'); if(!el) return;
+  const q=(document.getElementById('lib-q')||{}).value||'';
+  const items=state.exerciseLibrary.filter(e=>!q||e.name.toLowerCase().includes(q.toLowerCase()));
+  if(!items.length){el.innerHTML=q?`<div style="font-size:11px;color:var(--muted);padding:6px 8px;">No matches.</div>`:'';return;}
+  el.innerHTML=items.slice(0,8).map((e,i)=>`
+    <div class="lib-item" onclick="quickFillFromLibrary(${state.exerciseLibrary.indexOf(e)})">
+      <span class="cat-dot cat-${e.category}"></span>
+      <div class="lib-item-meta">
+        <div class="lib-item-name">${e.name}</div>
+        <div class="lib-item-sub">${Object.entries(CAT_META).find(([k])=>k===e.category)?.[1]?.label||e.category} · ${e.sets}×${e.reps||'—'} @ ${e.intensity||0}%</div>
+      </div>
+    </div>`).join('');
+}
+function quickFillFromLibrary(idx) {
+  const e=state.exerciseLibrary[idx]; if(!e) return;
+  _useTime=e.useTime||false; _useRPE=e.useRPE||false; _scheme=e.scheme||'normal'; _exNote=e.note||'';
+  _setGroups=e.setGroups?e.setGroups.map(sg=>({...sg,rpe:sg.rpe||8})):[{sets:e.sets||3,reps:e.reps||5,seconds:e.seconds||30,intensity:e.intensity||0,intensityHigh:e.intensityHigh||0,rpe:e.rpe||8}];
+  renderExModeBody();
+  const nb=document.getElementById('m-name'); if(nb) nb.value=e.name||'';
+  const cb=document.getElementById('m-cat'); if(cb) cb.value=e.category||'other';
+  document.getElementById('lib-search-wrap').style.display='none';
+}
 function renderExModeBody() {
   const body=document.getElementById('ex-mode-body');
   if(_exMode==='single') {
-    if(!_setGroups.length) _setGroups=[{sets:3,reps:3,seconds:30,intensity:75}];
+    if(!_setGroups.length) _setGroups=[{sets:3,reps:3,seconds:30,intensity:75,intensityHigh:0,rpe:8}];
+    const libHasItems=!_libraryMode&&state.exerciseLibrary.length>0;
     body.innerHTML=`
+      ${libHasItems?`<div id="lib-search-wrap" style="margin-bottom:.75rem;border:1px solid var(--dark3);border-radius:4px;padding:8px 10px;background:var(--dark2);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <label style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;margin:0;">📚 From Library</label>
+          <button onclick="document.getElementById('lib-search-wrap').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;">✕</button>
+        </div>
+        <input type="text" id="lib-q" placeholder="Search exercises…" oninput="renderLibraryQuickAdd()" style="width:100%;background:var(--black);border:1px solid var(--dark3);border-radius:3px;padding:5px 8px;font-size:13px;color:var(--white);margin-bottom:6px;">
+        <div id="lib-quick-add"></div>
+        <button onclick="renderLibraryQuickAdd()" style="display:none" id="lib-q-trigger"></button>
+      </div>`:''}
       <div class="form-field"><label>Exercise name</label><input type="text" id="m-name" placeholder="e.g. Back Squat" autofocus></div>
+      <div class="form-field" style="margin-bottom:.5rem;"><label>Coaching note <span style="font-weight:400;color:var(--muted);font-size:10px;">(optional — prints on PDF)</span></label>
+        <input type="text" id="m-note" placeholder="e.g. Bar stays close — catch in the hole" value="${_exNote||''}">
+      </div>
       <div style="display:flex;align-items:center;margin-bottom:8px;">
         <label style="font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;margin:0;">Set Groups</label>
         <div style="display:flex;align-items:center;gap:2px;margin-left:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;padding:2px;">
-          <button id="btn-measure-reps" onclick="_useTime=false;renderSetGroups()" style="background:${!_useTime?'var(--dark3)':'none'};border:none;cursor:pointer;color:${!_useTime?'var(--white)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Reps</button>
-          <button id="btn-measure-time" onclick="_useTime=true;renderSetGroups()" style="background:${_useTime?'var(--dark3)':'none'};border:none;cursor:pointer;color:${_useTime?'var(--gold)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Time</button>
+          <button id="btn-measure-reps" onclick="_useTime=false;_useRPE=false;renderSetGroups()" style="background:${!_useTime&&!_useRPE?'var(--dark3)':'none'};border:none;cursor:pointer;color:${!_useTime&&!_useRPE?'var(--white)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Reps</button>
+          <button id="btn-measure-time" onclick="_useTime=true;_useRPE=false;renderSetGroups()" style="background:${_useTime?'var(--dark3)':'none'};border:none;cursor:pointer;color:${_useTime?'var(--gold)':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">Time</button>
+          <button id="btn-measure-rpe" onclick="_useTime=false;_useRPE=true;renderSetGroups()" style="background:${_useRPE?'var(--dark3)':'none'};border:none;cursor:pointer;color:${_useRPE?'#E85252':'var(--muted)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:3px;transition:all .15s;">RPE</button>
         </div>
       </div>
       <div id="set-groups-container"></div>
       <button class="complex-add-btn" onclick="addSetGroup()">+ Add set group</button>
-      <div class="vol-preview" style="margin-top:.75rem;"><span>Total volume</span><strong id="vol-preview-val">—</strong></div>`;
+      <div class="vol-preview" style="margin-top:.75rem;"><span>Total volume</span><strong id="vol-preview-val">—</strong></div>
+      <div style="margin-top:.75rem;">
+        <label style="font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;display:block;margin-bottom:5px;">Loading Scheme</label>
+        <div class="scheme-selector" id="scheme-selector">
+          <button class="scheme-btn active" data-scheme="normal" onclick="_scheme='normal';renderSchemeSelector()">Normal</button>
+          <button class="scheme-btn s-ladder" data-scheme="ladder" onclick="_scheme='ladder';renderSchemeSelector()">Ladder</button>
+          <button class="scheme-btn s-amrap" data-scheme="amrap" onclick="_scheme='amrap';renderSchemeSelector()">AMRAP</button>
+          <button class="scheme-btn s-heavy" data-scheme="heavy_single" onclick="_scheme='heavy_single';renderSchemeSelector()">Heavy Single</button>
+        </div>
+        <div id="scheme-hint" style="font-size:11px;color:var(--muted);margin-top:5px;min-height:14px;"></div>
+      </div>`;
     renderSetGroups();
+    renderSchemeSelector();
+    if(libHasItems) renderLibraryQuickAdd();
+  } else if(_exMode==='superset') {
+    if(!_supersetExercises.length) _supersetExercises=[{name:'',category:'squat',reps:5,seconds:30,intensity:0,intensityHigh:0,useTime:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false}];
+    body.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;">
+        <label style="font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;white-space:nowrap;">Shared Sets</label>
+        <input type="number" id="ss-sets" value="${_supersetSets}" min="1" max="20" style="width:70px;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_supersetSets=parseInt(this.value)||1;autoVol()">
+        <span style="font-size:11px;color:var(--muted);">sets per round</span>
+      </div>
+      <div id="superset-rows-container"></div>
+      <button class="complex-add-btn" onclick="addSupersetEx()" id="ss-add-btn">+ Add exercise (${_supersetExercises.length}/4)</button>
+      <div class="vol-preview" style="margin-top:.75rem;"><span>Total volume</span><strong id="vol-preview-val">—</strong></div>`;
+    renderSupersetRows();
   } else {
     if(!_complexGroups.length) _complexGroups=[{sets:3,intensity:70}];
     body.innerHTML=`
@@ -1565,6 +1807,40 @@ function renderExModeBody() {
     renderMovements();
     renderComplexGroups();
   }
+}
+
+function renderSupersetRows() {
+  const container=document.getElementById('superset-rows-container'); if(!container) return;
+  const LETTERS=['A','B','C','D'];
+  const CAT_OPTS=Object.entries(CAT_META).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  const header=`<div style="display:grid;grid-template-columns:22px 1fr 100px 60px 60px 28px;gap:5px;padding:0 8px 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
+    <span></span><span>Exercise</span><span>Category</span><span style="text-align:center;">Reps</span><span style="text-align:center;">%</span><span></span>
+  </div>`;
+  const rows=_supersetExercises.map((se,i)=>{
+    const catOpts=Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${(se.category||'other')===k?' selected':''}>${v.label}</option>`).join('');
+    return `<div class="superset-ex">
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--gold);font-size:13px;">${LETTERS[i]}</span>
+      <input type="text" placeholder="Exercise name" value="${se.name||''}" oninput="_supersetExercises[${i}].name=this.value">
+      <select oninput="_supersetExercises[${i}].category=this.value">${catOpts}</select>
+      <input type="number" min="1" max="30" value="${se.reps||1}" style="text-align:center;" oninput="_supersetExercises[${i}].reps=parseInt(this.value)||1;autoVol()">
+      <input type="number" min="0" max="115" value="${se.intensity||''}" placeholder="0=BW" style="text-align:center;" oninput="_supersetExercises[${i}].intensity=parseInt(this.value)||0">
+      ${_supersetExercises.length>2?`<button class="complex-remove-btn" onclick="removeSupersetEx(${i})">✕</button>`:'<div></div>'}
+    </div>`;
+  }).join('');
+  container.innerHTML=header+rows;
+  const addBtn=document.getElementById('ss-add-btn');
+  if(addBtn){addBtn.textContent=`+ Add exercise (${_supersetExercises.length}/4)`;addBtn.style.display=_supersetExercises.length>=4?'none':'';}
+  autoVol();
+}
+function addSupersetEx() {
+  if(_supersetExercises.length>=4) return;
+  _supersetExercises.push({name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false});
+  renderSupersetRows();
+}
+function removeSupersetEx(i) {
+  if(_supersetExercises.length<=2) return;
+  _supersetExercises.splice(i,1);
+  renderSupersetRows();
 }
 
 function renderMovements() {
@@ -1635,36 +1911,48 @@ function removeComplexGroup(i) {
 function renderSetGroups() {
   const container=document.getElementById('set-groups-container');
   if(!container) return;
-  // Update toggle button styles
+  const btnRpe=document.getElementById('btn-measure-rpe');
+  if(btnRpe){btnRpe.style.background=_useRPE?'var(--dark3)':'none';btnRpe.style.color=_useRPE?'#E85252':'var(--muted)';}
   const btnReps=document.getElementById('btn-measure-reps');
   const btnTime=document.getElementById('btn-measure-time');
-  if(btnReps){btnReps.style.background=_useTime?'none':'var(--dark3)';btnReps.style.color=_useTime?'var(--muted)':'var(--white)';}
+  if(btnReps){btnReps.style.background=(!_useTime&&!_useRPE)?'var(--dark3)':'none';btnReps.style.color=(!_useTime&&!_useRPE)?'var(--white)':'var(--muted)';}
   if(btnTime){btnTime.style.background=_useTime?'var(--dark3)':'none';btnTime.style.color=_useTime?'var(--gold)':'var(--muted)';}
-  const measureLabel=_useTime?'Seconds':'Reps';
-  const header=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
-    <span>Sets</span><span>${measureLabel}</span><span>%1RM (0=BW)</span><span></span>
-  </div>`;
-  const rows=_setGroups.map((sg,i)=>`
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center;">
-      <input type="number" value="${sg.sets}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
-        oninput="_setGroups[${i}].sets=parseInt(this.value)||1;autoVol()">
-      ${_useTime
-        ?`<input type="number" value="${sg.seconds||30}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
-            oninput="_setGroups[${i}].seconds=parseInt(this.value)||1;autoVol()">`
-        :`<input type="number" value="${sg.reps||1}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
-            oninput="_setGroups[${i}].reps=parseInt(this.value)||1;autoVol()">`
-      }
-      <input type="number" value="${sg.intensity}" min="0" max="115" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
-        oninput="_setGroups[${i}].intensity=parseInt(this.value)||0">
-      ${_setGroups.length>1?`<button class="complex-remove-btn" onclick="removeSetGroup(${i})">✕</button>`:'<div></div>'}
-    </div>`).join('');
-  container.innerHTML=header+rows;
+  if(_useRPE) {
+    const header=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:5px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
+      <span>Sets</span><span>Reps</span><span style="color:#E85252;">RPE (1–10)</span><span></span>
+    </div>`;
+    const rows=_setGroups.map((sg,i)=>`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:5px;margin-bottom:6px;align-items:center;">
+        <input type="number" value="${sg.sets}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].sets=parseInt(this.value)||1;autoVol()">
+        <input type="number" value="${sg.reps||1}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].reps=parseInt(this.value)||1;autoVol()">
+        <input type="number" value="${sg.rpe||8}" min="1" max="10" step="0.5" style="width:100%;text-align:center;background:var(--dark2);border:1px solid rgba(232,82,82,.4);color:#E85252;border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].rpe=parseFloat(this.value)||8">
+        ${_setGroups.length>1?`<button class="complex-remove-btn" onclick="removeSetGroup(${i})">✕</button>`:'<div></div>'}
+      </div>`).join('');
+    container.innerHTML=header+rows;
+  } else {
+    const measureLabel=_useTime?'Seconds':'Reps';
+    const header=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 28px;gap:5px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
+      <span>Sets</span><span>${measureLabel}</span><span>Low%</span><span>High% <span style="font-weight:400;opacity:.6;">(opt)</span></span><span></span>
+    </div>`;
+    const rows=_setGroups.map((sg,i)=>`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 28px;gap:5px;margin-bottom:6px;align-items:center;">
+        <input type="number" value="${sg.sets}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].sets=parseInt(this.value)||1;autoVol()">
+        ${_useTime
+          ?`<input type="number" value="${sg.seconds||30}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].seconds=parseInt(this.value)||1;autoVol()">`
+          :`<input type="number" value="${sg.reps||1}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].reps=parseInt(this.value)||1;autoVol()">`
+        }
+        <input type="number" value="${sg.intensity||0}" min="0" max="115" placeholder="0=BW" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].intensity=parseInt(this.value)||0">
+        <input type="number" value="${sg.intensityHigh||''}" min="0" max="115" placeholder="—" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--muted);border-radius:4px;padding:6px 4px;font-size:14px;" oninput="_setGroups[${i}].intensityHigh=parseInt(this.value)||0">
+        ${_setGroups.length>1?`<button class="complex-remove-btn" onclick="removeSetGroup(${i})">✕</button>`:'<div></div>'}
+      </div>`).join('');
+    container.innerHTML=header+rows;
+  }
   autoVol();
 }
 
 function addSetGroup() {
-  const last=_setGroups[_setGroups.length-1]||{sets:1,reps:3,seconds:30,intensity:75};
-  _setGroups.push({sets:last.sets,reps:last.reps,seconds:last.seconds||30,intensity:last.intensity});
+  const last=_setGroups[_setGroups.length-1]||{sets:1,reps:3,seconds:30,intensity:75,rpe:8};
+  _setGroups.push({sets:last.sets,reps:last.reps,seconds:last.seconds||30,intensity:last.intensity,intensityHigh:0,rpe:last.rpe||8});
   renderSetGroups();
 }
 
@@ -1690,9 +1978,13 @@ function updateComplexVol() {
 }
 
 function autoVol() {
+  const el=document.getElementById('vol-preview-val'); if(!el) return;
+  if(_exMode==='superset') {
+    const total=_supersetSets*_supersetExercises.reduce((s,se)=>s+(se.reps||0),0);
+    el.textContent=`${total} reps (${_supersetSets} sets × ${_supersetExercises.length} exercises)`;
+    return;
+  }
   const totalSets=_setGroups.reduce((s,sg)=>s+(sg.sets||0),0);
-  const el=document.getElementById('vol-preview-val');
-  if(!el) return;
   if(_useTime) {
     const totalSecs=_setGroups.reduce((s,sg)=>s+(sg.sets||0)*(sg.seconds||0),0);
     el.textContent=`${totalSecs}s total (${totalSets} set${totalSets!==1?'s':''})`;
@@ -1733,20 +2025,30 @@ function saveExercise() {
       volume,
       category: topCat
     };
+  } else if(_exMode==='superset') {
+    const filled=_supersetExercises.filter(se=>se.name.trim());
+    if(filled.length<2){alert('Enter names for at least 2 exercises in the superset.');return;}
+    const sets=_supersetSets||1;
+    const volume=sets*filled.reduce((s,se)=>s+(se.reps||0),0);
+    const avgInt=Math.round(filled.reduce((s,se)=>s+(se.intensity||0),0)/filled.length);
+    ex={name:'',isSuperset:true,isComplex:false,supersetExercises:filled.map(se=>({name:se.name.trim(),category:se.category||'other',reps:se.reps||1,seconds:se.seconds||30,intensity:se.intensity||0,intensityHigh:se.intensityHigh||0,useTime:se.useTime||false})),sets,volume,intensity:avgInt,scheme:'normal',category:filled[0].category||'other'};
   } else {
     const name=document.getElementById('m-name').value.trim();
     if(!name){alert('Please enter an exercise name.');return;}
+    const note=(document.getElementById('m-note')||{}).value?.trim()||_exNote||'';
     const groups=_setGroups.map(sg=>({
       sets:parseInt(sg.sets)||1,
-      reps:_useTime?0:(parseInt(sg.reps)||1),
+      reps:(_useTime||_useRPE)?0:(parseInt(sg.reps)||1),
       seconds:_useTime?(parseInt(sg.seconds)||30):0,
-      intensity:parseInt(sg.intensity)||0
+      intensity:_useRPE?0:(parseInt(sg.intensity)||0),
+      intensityHigh:_useRPE?0:(parseInt(sg.intensityHigh)||0),
+      rpe:_useRPE?(parseFloat(sg.rpe)||8):0
     }));
     const totalSets=groups.reduce((s,sg)=>s+sg.sets,0);
-    const wInt=groups.reduce((s,sg)=>s+sg.intensity*sg.sets,0);
-    const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
-    const volume=_useTime?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
-    ex={name,isComplex:false,useTime:_useTime,setGroups:groups,sets:totalSets,reps:_useTime?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
+    const wInt=_useRPE?0:groups.reduce((s,sg)=>{const lo=sg.intensity||0;const hi=sg.intensityHigh||lo;return s+((lo+hi)/2)*sg.sets;},0);
+    const avgIntensity=(!_useRPE&&totalSets>0)?Math.round(wInt/totalSets):0;
+    const volume=(_useTime||_useRPE)?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    ex={name,isComplex:false,useTime:_useTime,useRPE:_useRPE,setGroups:groups,scheme:_scheme,note,sets:totalSets,reps:(_useTime||_useRPE)?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
   }
 
   if(_exSection==='warmup') {
@@ -1768,16 +2070,23 @@ function openEditExercise(day, idx, section='main') {
   const days=trainingDays();
   _exSection=section;
 
-  _exMode=ex.isComplex?'complex':'single';
+  _exMode=ex.isSuperset?'superset':ex.isComplex?'complex':'single';
   _useTime=ex.useTime||false;
+  _useRPE=ex.useRPE||false;
+  _exNote=ex.note||'';
+  _scheme=ex.scheme||'normal';
   _movements=ex.isComplex
     ? ex.movements.map(m=>({name:m.name,reps:m.reps,category:m.category||'other'}))
     : [{name:'',reps:1,category:'other'}];
   _complexGroups=ex.isComplex
     ? (ex.complexGroups?ex.complexGroups.map(cg=>({...cg})):[{sets:ex.sets||1,intensity:ex.intensity||0}])
     : [{sets:3,intensity:70}];
-  _setGroups=ex.isComplex?[]
-    :(ex.setGroups?ex.setGroups.map(sg=>({...sg})):[{sets:ex.sets||1,reps:ex.reps||1,seconds:ex.seconds||30,intensity:ex.intensity||0}]);
+  _setGroups=ex.isComplex||ex.isSuperset?[]
+    :(ex.setGroups?ex.setGroups.map(sg=>({...sg,intensityHigh:sg.intensityHigh||0,rpe:sg.rpe||8})):[{sets:ex.sets||1,reps:ex.reps||1,seconds:ex.seconds||30,intensity:ex.intensity||0,intensityHigh:0,rpe:8}]);
+  _supersetSets=ex.isSuperset?(ex.sets||3):3;
+  _supersetExercises=ex.isSuperset&&ex.supersetExercises
+    ?ex.supersetExercises.map(se=>({...se,intensityHigh:se.intensityHigh||0}))
+    :[{name:'',category:'squat',reps:5,seconds:30,intensity:0,intensityHigh:0,useTime:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false}];
 
   document.getElementById('modal-body').innerHTML=`
     <h3>Edit Exercise</h3>
@@ -1798,7 +2107,8 @@ function openEditExercise(day, idx, section='main') {
       </select>
     </div>
     <div class="ex-type-tabs">
-      <div class="ex-type-tab ${!ex.isComplex?'active':''}" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
+      <div class="ex-type-tab ${!ex.isComplex&&!ex.isSuperset?'active':''}" id="tab-single" onclick="switchExMode('single')">Single exercise</div>
+      <div class="ex-type-tab ${ex.isSuperset?'active':''}" id="tab-superset" onclick="switchExMode('superset')">Superset</div>
       <div class="ex-type-tab ${ex.isComplex?'active':''}" id="tab-complex" onclick="switchExMode('complex')">Complex</div>
     </div>
     <div id="ex-mode-body"></div>
@@ -1809,9 +2119,12 @@ function openEditExercise(day, idx, section='main') {
   document.getElementById('overlay').style.display='flex';
 
   renderExModeBody();
-  if(!ex.isComplex) {
+  if(ex.isSuperset) {
+    // superset: renderExModeBody already called renderSupersetRows via its branch
+  } else if(!ex.isComplex) {
     const nb=document.getElementById('m-name'); if(nb) nb.value=ex.name||'';
     renderSetGroups();
+    renderSchemeSelector();
   } else {
     const nb=document.getElementById('m-name'); if(nb) nb.value=ex.name||'';
     renderComplexGroups();
@@ -1837,20 +2150,30 @@ function saveEditExercise(day, idx, section='main') {
     const rawName=document.getElementById('m-name').value.trim();
     const autoName=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
     ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),complexGroups:groups,sets:totalSets,reps:volume,repsPerSet,intensity:avgIntensity,volume,category};
+  } else if(_exMode==='superset') {
+    const filled=_supersetExercises.filter(se=>se.name.trim());
+    if(filled.length<2){alert('Enter names for at least 2 exercises in the superset.');return;}
+    const sets=_supersetSets||1;
+    const volume=sets*filled.reduce((s,se)=>s+(se.reps||0),0);
+    const avgInt=Math.round(filled.reduce((s,se)=>s+(se.intensity||0),0)/filled.length);
+    ex={name:'',isSuperset:true,isComplex:false,supersetExercises:filled.map(se=>({name:se.name.trim(),category:se.category||'other',reps:se.reps||1,seconds:se.seconds||30,intensity:se.intensity||0,intensityHigh:se.intensityHigh||0,useTime:se.useTime||false})),sets,volume,intensity:avgInt,scheme:'normal',category:filled[0].category||'other'};
   } else {
     const name=document.getElementById('m-name').value.trim();
     if(!name){alert('Please enter an exercise name.');return;}
+    const note=(document.getElementById('m-note')||{}).value?.trim()||_exNote||'';
     const groups=_setGroups.map(sg=>({
       sets:parseInt(sg.sets)||1,
-      reps:_useTime?0:(parseInt(sg.reps)||1),
+      reps:(_useTime||_useRPE)?0:(parseInt(sg.reps)||1),
       seconds:_useTime?(parseInt(sg.seconds)||30):0,
-      intensity:parseInt(sg.intensity)||0
+      intensity:_useRPE?0:(parseInt(sg.intensity)||0),
+      intensityHigh:_useRPE?0:(parseInt(sg.intensityHigh)||0),
+      rpe:_useRPE?(parseFloat(sg.rpe)||8):0
     }));
     const totalSets=groups.reduce((s,sg)=>s+sg.sets,0);
-    const wInt=groups.reduce((s,sg)=>s+sg.intensity*sg.sets,0);
-    const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
-    const volume=_useTime?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
-    ex={name,isComplex:false,useTime:_useTime,setGroups:groups,sets:totalSets,reps:_useTime?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
+    const wInt=_useRPE?0:groups.reduce((s,sg)=>{const lo=sg.intensity||0;const hi=sg.intensityHigh||lo;return s+((lo+hi)/2)*sg.sets;},0);
+    const avgIntensity=(!_useRPE&&totalSets>0)?Math.round(wInt/totalSets):0;
+    const volume=(_useTime||_useRPE)?0:groups.reduce((s,sg)=>s+sg.sets*sg.reps,0);
+    ex={name,isComplex:false,useTime:_useTime,useRPE:_useRPE,setGroups:groups,scheme:_scheme,note,sets:totalSets,reps:(_useTime||_useRPE)?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,intensity:avgIntensity,volume,category};
   }
 
   // Remove from source array
@@ -1901,6 +2224,254 @@ function athleteOlympicTotal(a) {
 function athleteTraditionalTotal(a) {
   const b=a.bench||0, c=a.cj||0;
   return (b&&c) ? b+c : 0;
+}
+
+// ═══════════════════════════════════════════════════
+//  MULTI-WEEK CALENDAR
+// ═══════════════════════════════════════════════════
+function buildCalendarHTML() {
+  const p=prog();
+  if(!p) return '<div class="empty-msg">No program selected.</div>';
+  const ws=weekNums().sort((a,b)=>a-b);
+  if(!ws.length) return '<div class="empty-msg">No weeks yet — add a week to get started.</div>';
+  const PHASE_COLORS={accumulation:'#4A90D9',intensification:'#D4A017',realization:'#E85252',deload:'#7DC87D'};
+  const days=trainingDays();
+  const cards=ws.map(wn=>{
+    const wd=getWeek(wn); if(!wd) return '';
+    const totalVol=Object.values(wd.days||{}).reduce((s,d)=>s+(d.exercises||[]).reduce((a,e)=>a+(e.volume||0),0),0);
+    const phaseColor=PHASE_COLORS[wd.phase]||'#4A90D9';
+    const phaseName=wd.phase?(wd.phase.charAt(0).toUpperCase()+wd.phase.slice(1)):'—';
+    const isActive=wn===state.currentWeek;
+    const dayColumns=days.map(day=>{
+      const dd=wd.days?.[day];
+      const exes=dd?.exercises||[];
+      const exList=exes.slice(0,6).map(ex=>{
+        const nm=ex.isSuperset?`SS (${ex.supersetExercises?.length||2}ex)`:(ex.name||'Complex');
+        const info=ex.isSuperset?`${ex.sets}×`
+          :ex.isComplex?`${ex.sets}×${ex.repsPerSet}/set`
+          :ex.useRPE?`${ex.sets}×${ex.reps} RPE${(ex.setGroups?.[0]?.rpe)||8}`
+          :ex.useTime?`${ex.sets}×${ex.seconds||0}s`
+          :`${ex.sets}×${ex.reps}`;
+        return `<div style="display:flex;align-items:baseline;gap:4px;padding:1px 0;"><span class="cat-dot cat-${ex.category}" style="width:5px;height:5px;flex-shrink:0;margin-top:3px;"></span><span style="font-size:11px;color:var(--light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;">${nm}</span><span style="font-size:10px;color:var(--muted);white-space:nowrap;">${info}</span></div>`;
+      }).join('');
+      const more=exes.length>6?`<div style="font-size:10px;color:var(--muted);padding-top:1px;">+${exes.length-6} more</div>`:'';
+      return `<div style="flex:1;min-width:0;padding:0 8px;border-left:1px solid var(--dark3);">
+        <div style="font-size:10px;font-weight:700;color:${dd?.focus?'var(--gold-light)':'var(--muted)'};letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;">${day}${dd?.focus?`<span style="font-weight:400;color:var(--muted);margin-left:5px;font-size:9px;">${dd.focus}</span>`:''}</div>
+        ${exList||'<div style="font-size:10px;color:var(--dark3);">Rest</div>'}
+        ${more}
+      </div>`;
+    }).join('');
+    return `<div class="cal-week-card ${isActive?'active':''}">
+      <div class="cal-week-header">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;white-space:nowrap;">Week ${wn}</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:2px 8px;border-radius:3px;background:${phaseColor}22;color:${phaseColor};border:1px solid ${phaseColor}44;white-space:nowrap;">${phaseName}</span>
+          ${wd.note?`<span style="font-size:11px;color:var(--muted);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${wd.note}</span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <span style="font-size:11px;color:var(--muted);">Vol: <strong style="color:var(--white);">${totalVol}</strong></span>
+          <button onclick="state.currentWeek=${wn};switchTab('program')" style="background:var(--gold-a15);border:1px solid var(--gold-a30);color:var(--gold);border-radius:3px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;">Go →</button>
+        </div>
+      </div>
+      <div style="display:flex;padding:8px 0 8px 8px;overflow-x:auto;">
+        ${dayColumns}
+      </div>
+    </div>`;
+  }).join('');
+  const totalVol=ws.reduce((s,wn)=>{const wd=getWeek(wn);return s+Object.values(wd?.days||{}).reduce((a,d)=>a+(d.exercises||[]).reduce((b,e)=>b+(e.volume||0),0),0);},0);
+  return `<div style="padding:1.25rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div>
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;margin:0;">${p.name} — Program Calendar</h2>
+        <p style="font-size:12px;color:var(--muted);margin:3px 0 0;">${ws.length} weeks · ${totalVol} total reps</p>
+      </div>
+    </div>
+    ${cards}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  EXERCISE LIBRARY
+// ═══════════════════════════════════════════════════
+function saveToLibraryFromModal() {
+  const name=(document.getElementById('m-name')||{}).value?.trim();
+  if(!name){alert('Enter an exercise name before saving to library.');return;}
+  const category=(document.getElementById('m-cat')||{}).value||'other';
+  const note=(document.getElementById('m-note')||{}).value?.trim()||'';
+  const groups=_setGroups.map(sg=>({...sg}));
+  const totalSets=groups.reduce((s,sg)=>s+sg.sets,0);
+  const entry={name,category,note,useTime:_useTime,useRPE:_useRPE,scheme:_scheme,setGroups:groups,
+    sets:totalSets,reps:_useTime?0:(groups[0]?.reps||0),seconds:_useTime?(groups[0]?.seconds||0):0,
+    intensity:groups[0]?.intensity||0,intensityHigh:groups[0]?.intensityHigh||0,rpe:groups[0]?.rpe||0};
+  if(_libraryEditIdx>=0) {
+    state.exerciseLibrary[_libraryEditIdx]=entry;
+  } else {
+    const existing=state.exerciseLibrary.findIndex(e=>e.name.toLowerCase()===name.toLowerCase());
+    if(existing>=0){
+      if(!confirm(`"${name}" is already in your library. Overwrite it?`)) return;
+      state.exerciseLibrary[existing]=entry;
+    } else {
+      state.exerciseLibrary.push(entry);
+    }
+  }
+  saveState();
+  if(_libraryMode){
+    closeModal();
+    renderMain();
+  } else {
+    alert(`"${name}" saved to library.`);
+  }
+}
+
+function removeFromLibrary(idx) {
+  if(!confirm('Remove this exercise from your library?')) return;
+  state.exerciseLibrary.splice(idx,1);
+  saveState();
+  renderMain();
+}
+
+function getDefaultLibrary() {
+  function ex(name,category,sets,reps,intensity,note,opts) {
+    opts=opts||{};
+    const sg={sets,reps,seconds:opts.seconds||30,intensity,intensityHigh:opts.intensityHigh||0,rpe:8};
+    return {name,category,note:note||'',useTime:!!opts.useTime,useRPE:false,scheme:'normal',
+      setGroups:[sg],sets,reps:opts.useTime?0:reps,seconds:opts.useTime?(opts.seconds||30):0,
+      intensity,intensityHigh:opts.intensityHigh||0,rpe:0};
+  }
+  return [
+    // ── Snatch ──
+    ex('Snatch','snatch',3,2,80,'Full squat catch — stay over the bar through the pull'),
+    ex('Power Snatch','snatch',3,3,75,'Catch above parallel — meet the bar, don\'t wait'),
+    ex('Hang Snatch','snatch',3,3,75,'Bar stays close off the hip — stay patient'),
+    ex('Hang Power Snatch','snatch',3,3,70,''),
+    ex('High Hang Snatch','snatch',3,3,70,'Bar at hip crease — focus on aggressive hip extension'),
+    ex('Block Snatch','snatch',3,3,75,''),
+    ex('Block Power Snatch','snatch',3,3,70,''),
+    ex('Muscle Snatch','snatch',3,5,55,'No re-bend — press bar overhead with continuous arm movement'),
+    ex('Snatch Balance','snatch',3,3,70,'Punch under fast — feet land before bar stops'),
+    ex('Heaving Snatch Balance','snatch',3,3,65,'Dip and drive before punching under'),
+    ex('Drop Snatch','snatch',3,5,50,'Active punch-under — no leg drive'),
+    ex('Overhead Squat','snatch',4,4,70,'Bar behind ears — lat tension keeps it stable'),
+    ex('Pause Overhead Squat','snatch',3,3,65,'3-second pause in the hole'),
+    ex('2-Position Snatch','snatch',3,2,72,'Rep 1 from floor, rep 2 from hang — match positions'),
+    // ── Clean ──
+    ex('Clean','clean',3,2,80,''),
+    ex('Power Clean','clean',3,3,75,'Catch above parallel'),
+    ex('Hang Clean','clean',3,3,75,'Bar close to body off the hip'),
+    ex('Hang Power Clean','clean',3,3,70,''),
+    ex('High Hang Clean','clean',3,3,70,''),
+    ex('Block Clean','clean',3,3,75,''),
+    ex('Block Power Clean','clean',3,3,70,''),
+    ex('Muscle Clean','clean',3,5,55,'No re-bend — continuous pull to front rack'),
+    ex('Pause Clean','clean',3,3,72,'2-second pause at knee — stay over the bar'),
+    ex('2-Position Clean','clean',3,2,72,'Rep 1 from floor, rep 2 from hang'),
+    ex('3-Position Clean','clean',3,1,68,'Floor, knee, hip — same mechanics each position'),
+    // ── Jerk ──
+    ex('Split Jerk','jerk',4,2,80,'Full split recovery — lead foot back first'),
+    ex('Power Jerk','jerk',4,3,75,'Feet stay hip-width — catch with slight knee bend'),
+    ex('Push Jerk','jerk',4,3,72,''),
+    ex('Jerk from Rack','jerk',4,3,82,'Removes the clean fatigue — focus purely on jerk mechanics'),
+    ex('Jerk Balance','jerk',3,5,50,'Dip + drive, step into split — re-enforce foot timing'),
+    ex('Pause Jerk','jerk',3,3,75,'2-second pause in dip — vertical torso, knees out'),
+    ex('Behind the Neck Jerk','jerk',3,3,70,''),
+    ex('Press in Split','jerk',3,5,55,'Strict press from split position — shoulder stability'),
+    ex('Jerk Dip & Drive','jerk',5,5,80,'No catch — just dip and drive to full extension'),
+    // ── Clean & Jerk ──
+    ex('Clean & Jerk','cj',3,2,80,''),
+    ex('Power Clean & Jerk','cj',3,2,75,''),
+    ex('Hang Clean & Jerk','cj',3,2,75,''),
+    ex('Power Clean & Push Jerk','cj',3,3,70,''),
+    ex('Clean & Power Jerk','cj',3,2,75,''),
+    // ── Squat ──
+    ex('Back Squat','squat',4,4,75,''),
+    ex('Front Squat','squat',4,4,75,'Elbows high — don\'t let chest collapse'),
+    ex('Pause Back Squat','squat',4,3,70,'3-second pause — stay tight at the bottom'),
+    ex('Pause Front Squat','squat',4,3,68,'3-second pause in the hole'),
+    ex('Overhead Squat','squat',4,4,65,'Bar stays behind ears — active lats'),
+    ex('Box Squat','squat',4,4,70,'Sit to the box, do not rest — maintain tension'),
+    ex('Bulgarian Split Squat','squat',3,8,0,'Rear foot elevated — keep front shin vertical'),
+    ex('Goblet Squat','squat',3,10,0,''),
+    // ── Pull ──
+    ex('Snatch Pull','pull',4,4,95,'Shrug at the top — same posture as the snatch'),
+    ex('Snatch High Pull','pull',4,4,85,'Pull elbows high and wide above the bar'),
+    ex('Snatch Deadlift','pull',4,4,100,'Slow controlled descent — reinforce position'),
+    ex('Snatch-Grip Romanian Deadlift','pull',4,5,65,'Hinge at hip — slight knee bend, bar close to body'),
+    ex('Clean Pull','pull',4,4,100,'Shrug at top — bar stays close'),
+    ex('Clean High Pull','pull',4,4,85,'Pull elbows above bar level'),
+    ex('Clean Deadlift','pull',4,4,110,'Reinforces pull posture under heavy load'),
+    ex('Clean-Grip Romanian Deadlift','pull',4,5,65,'Bar dragged close — load the hamstrings'),
+    ex('Deadlift','pull',4,4,90,''),
+    ex('Romanian Deadlift','pull',4,6,55,'Hinge deep — keep a neutral spine'),
+    // ── Press ──
+    ex('Push Press','press',4,4,70,'Dip drives the bar — arms lock out overhead'),
+    ex('Strict Press','press',4,5,60,'No leg drive — pure shoulder strength'),
+    ex('Behind the Neck Push Press','press',4,4,65,''),
+    ex('Behind the Neck Press','press',4,5,55,''),
+    ex('Jerk Drive','press',5,5,80,'No catch — drive to full triple extension'),
+    // ── Accessory ──
+    ex('Good Morning','accessory',3,8,0,'Hinge at hip — neutral spine, soft knees'),
+    ex('Glute Ham Raise','accessory',3,8,0,'Control the descent — posterior chain focus'),
+    ex('Back Extension','accessory',3,12,0,''),
+    ex('Reverse Hyper','accessory',3,12,0,''),
+    ex('Hip Thrust','accessory',3,10,0,'Full hip extension at top — glute squeeze'),
+    ex('Barbell Row','accessory',3,8,0,'Chest supported or bent-over — retract scapula'),
+    ex('Pull-Up','accessory',3,8,0,'Full ROM — dead hang to chin over bar'),
+    ex('Lat Pulldown','accessory',3,10,0,''),
+    ex('Face Pull','accessory',3,15,0,''),
+    ex('GHD Sit-Up','accessory',3,15,0,''),
+    ex('Ab Wheel Rollout','accessory',3,10,0,'Hips neutral — don\'t let the lower back sag'),
+    ex('Plank','accessory',3,0,0,'Hollow body position — breathe',{useTime:true,seconds:45}),
+    ex('Side Plank','accessory',3,0,0,'',{useTime:true,seconds:30}),
+    ex('Box Jump','accessory',4,5,0,'Soft landing — absorb through hips and knees'),
+    ex('Broad Jump','accessory',4,5,0,''),
+    ex('Farmer\'s Carry','accessory',3,0,0,'',{useTime:true,seconds:40}),
+    ex('Kettlebell Swing','accessory',3,12,0,'Hip hinge power — not a squat'),
+    ex('Band Pull-Apart','accessory',3,20,0,''),
+    ex('Single-Arm Dumbbell Snatch','accessory',3,8,0,''),
+    ex('Dumbbell Row','accessory',3,10,0,''),
+    ex('Medicine Ball Slam','accessory',3,10,0,''),
+    ex('Shrug','accessory',4,8,80,'Traps — straight up, no roll'),
+  ];
+}
+
+function loadDefaultLibrary() {
+  const defaults=getDefaultLibrary();
+  let added=0, skipped=0;
+  defaults.forEach(entry=>{
+    const exists=state.exerciseLibrary.some(e=>e.name.toLowerCase()===entry.name.toLowerCase());
+    if(exists){skipped++;}else{state.exerciseLibrary.push(entry);added++;}
+  });
+  saveState();
+  renderMain();
+  if(skipped>0) alert(`Added ${added} exercise${added!==1?'s':''}. Skipped ${skipped} already in your library.`);
+}
+
+function buildLibraryHTML() {
+  const lib=state.exerciseLibrary||[];
+  const items=lib.map((e,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--dark3);border-radius:5px;margin-bottom:6px;background:var(--dark1);">
+      <span class="cat-dot cat-${e.category}" style="flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;color:var(--white);font-weight:500;">${e.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${CAT_META[e.category]?.label||e.category} · ${e.sets} set${e.sets!==1?'s':''} × ${e.useRPE?'—':e.useTime?(e.seconds||0)+'s':(e.reps||0)+' reps'} @ ${e.useRPE?'RPE '+(e.rpe||8):e.intensityHigh>0?e.intensity+'–'+e.intensityHigh+'%':(e.intensity||0)+'%'}${e.note?` · <em>${e.note}</em>`:''}</div>
+      </div>
+      <button onclick="openAddToLibrary(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:3px 8px;" title="Edit">✏️</button>
+      <button onclick="removeFromLibrary(${i})" style="background:none;border:none;cursor:pointer;color:#555;font-size:13px;padding:3px 6px;" title="Remove">✕</button>
+    </div>`).join('');
+  return `<div style="padding:1.25rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div>
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;margin:0;">Exercise Library</h2>
+        <p style="font-size:12px;color:var(--muted);margin:3px 0 0;">Global across all programs. Click an exercise when adding to autofill the form.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--muted);">${lib.length} exercise${lib.length!==1?'s':''}</span>
+        <button class="btn btn-outline" onclick="loadDefaultLibrary()" style="font-size:12px;padding:5px 12px;" title="Add the standard Olympic weightlifting exercise list">⬇ Load Defaults</button>
+        <button class="btn btn-gold" onclick="openAddToLibrary()" style="font-size:12px;padding:5px 14px;">+ Add Exercise</button>
+      </div>
+    </div>
+    ${lib.length?items:`<div class="empty-msg">No exercises saved yet. Click "+ Add Exercise" above, or use "📚 Save to Library" inside the exercise modal.</div>`}
+  </div>`;
 }
 
 // Roster filter state
@@ -1976,6 +2547,7 @@ function buildRosterHTML() {
       <div class="week-title">Athlete Roster</div>
       <div style="flex:1;"></div>
       <button onclick="openManageRosterFields()" class="btn btn-outline" style="font-size:13px;">⚙ Manage fields</button>
+      <button onclick="openImportRosterCSV()" class="btn btn-outline" style="font-size:13px;">⬆ Import CSV</button>
       <button onclick="openAddAthlete()" class="btn btn-gold" style="font-size:13px;">+ Add athlete</button>
       <span style="font-size:13px;color:var(--muted);margin-left:4px;">${athletes.length} athlete${athletes.length!==1?'s':''}</span>
     </div>
@@ -2073,6 +2645,152 @@ function updateWCOpts(gender) {
   const sel=document.getElementById('af-wc'); if(!sel) return;
   const opts=(gender==='Boys'?BOYS_WC:GIRLS_WC).map(w=>`<option value="${w}">${w}</option>`).join('');
   sel.innerHTML=opts;
+}
+
+// ── CSV Roster Import ──
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
+  function parseLine(line) {
+    const vals=[]; let cur='', inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'&&!inQ&&(i===0||line[i-1]===',')){inQ=true;}
+      else if(ch==='"'&&inQ&&(i+1===line.length||line[i+1]===',')){inQ=false;}
+      else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}
+      else{cur+=ch;}
+    }
+    vals.push(cur.trim());
+    return vals;
+  }
+  const headers=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,'').trim().toLowerCase());
+  const rows=lines.slice(1).map(l=>parseLine(l).map(v=>v.replace(/^"|"$/g,'').trim()));
+  return {headers,rows};
+}
+
+function detectRosterColumns(headers) {
+  const find=(...keys)=>headers.findIndex(h=>keys.some(k=>h===k||h.includes(k)));
+  return {
+    name:      find('name','athlete','full name','athlete name'),
+    firstName: find('first name','firstname','first'),
+    lastName:  find('last name','lastname','last'),
+    gender:    find('gender','sex','m/f'),
+    wc:        find('weight class','wc','class','weight'),
+    team:      find('team','school','org','club'),
+    gradYear:  find('grad year','graduation','class year','year','grade'),
+    snatch:    find('snatch'),
+    cj:        find('c&j','cj','clean jerk','clean & jerk','clean and jerk','clean/jerk'),
+    bench:     find('bench','bench press'),
+  };
+}
+
+let _csvData = null;
+let _csvCols = null;
+
+function openImportRosterCSV() {
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Import Roster from CSV</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">
+      Upload a CSV file exported from Excel or Google Sheets. Columns auto-detected from header row.<br>
+      <span style="font-size:11px;">Expected headers: Name, Gender, Weight Class, Team, Snatch, C&J, Bench, Grad Year</span>
+    </p>
+    <div style="border:2px dashed var(--dark3);border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;" onclick="document.getElementById('csv-file-input').click()">
+      <div style="font-size:2rem;margin-bottom:.5rem;">📄</div>
+      <div style="font-size:14px;color:var(--white);">Click to select a CSV file</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">.csv files only — export from Excel/Google Sheets as CSV</div>
+      <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display:none" onchange="handleCSVFile(this)">
+    </div>
+    <div id="csv-preview"></div>
+    <div class="modal-actions" id="csv-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+  _csvData=null; _csvCols=null;
+}
+
+function handleCSVFile(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try {
+      const {headers,rows}=parseCSV(e.target.result);
+      _csvCols=detectRosterColumns(headers);
+      _csvData={headers,rows};
+      renderCSVPreview(headers,rows,_csvCols);
+    } catch(err) {
+      document.getElementById('csv-preview').innerHTML=`<div style="color:#E85252;margin-top:1rem;">Error reading file: ${err.message}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function renderCSVPreview(headers,rows,cols) {
+  const preview=document.getElementById('csv-preview'); if(!preview) return;
+  const actions=document.getElementById('csv-actions'); if(!actions) return;
+  const valid=rows.filter(r=>r.length>0&&r.some(c=>c));
+  const fieldMap=[
+    {key:'name',label:'Name',idx:cols.firstName>=0&&cols.lastName>=0?-2:cols.name},
+    {key:'gender',label:'Gender',idx:cols.gender},
+    {key:'wc',label:'Weight Class',idx:cols.wc},
+    {key:'team',label:'Team',idx:cols.team},
+    {key:'snatch',label:'Snatch',idx:cols.snatch},
+    {key:'cj',label:'C&J',idx:cols.cj},
+    {key:'bench',label:'Bench',idx:cols.bench},
+    {key:'gradYear',label:'Grad Year',idx:cols.gradYear},
+  ];
+  const detected=fieldMap.filter(f=>f.idx!==-1);
+  const mappingRows=fieldMap.map(f=>`<tr>
+    <td style="padding:3px 8px;color:var(--muted);font-size:12px;">${f.label}</td>
+    <td style="padding:3px 8px;font-size:12px;color:${f.idx!==-1?'var(--white)':'#555'};">${
+      f.idx===-2?`"${headers[cols.firstName]}" + "${headers[cols.lastName]}"`:
+      f.idx>=0?`"${headers[f.idx]}"`:
+      '— not found'
+    }</td>
+  </tr>`).join('');
+  const sampleRows=valid.slice(0,5).map(r=>{
+    const name=cols.firstName>=0&&cols.lastName>=0?(r[cols.firstName]||'')+' '+(r[cols.lastName]||''):cols.name>=0?r[cols.name]||'':'?';
+    const parts=[name.trim(),cols.gender>=0?r[cols.gender]||'':'',cols.wc>=0?r[cols.wc]||'':'',cols.snatch>=0?r[cols.snatch]||'':'',cols.cj>=0?r[cols.cj]||'':''];
+    return `<tr>${parts.map(p=>`<td style="padding:3px 8px;font-size:11px;color:var(--light);">${p}</td>`).join('')}</tr>`;
+  }).join('');
+  preview.innerHTML=`
+    <div style="margin-top:1rem;">
+      <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px;">Detected ${valid.length} athlete${valid.length!==1?'s':''} — column mapping:</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:1rem;"><tbody>${mappingRows}</tbody></table>
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px;">Preview (first ${Math.min(5,valid.length)}):</div>
+      <table style="width:100%;border-collapse:collapse;"><thead><tr>${['Name','Gender','WC','Snatch','C&J'].map(h=>`<th style="padding:3px 8px;font-size:10px;color:var(--muted);text-align:left;">${h}</th>`).join('')}</tr></thead><tbody>${sampleRows}</tbody></table>
+    </div>`;
+  actions.innerHTML=`
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-gold" onclick="confirmImportRoster()">Import ${valid.length} athlete${valid.length!==1?'s':''}</button>`;
+}
+
+function confirmImportRoster() {
+  if(!_csvData||!_csvCols) return;
+  const {rows}=_csvData; const cols=_csvCols;
+  let added=0, skipped=0;
+  rows.forEach(r=>{
+    if(!r.length||!r.some(c=>c)) return;
+    const name=(cols.firstName>=0&&cols.lastName>=0)
+      ?((r[cols.firstName]||'')+' '+(r[cols.lastName]||'')).trim()
+      :(cols.name>=0?r[cols.name]?.trim():'');
+    if(!name){skipped++;return;}
+    const a={
+      name,
+      gender: cols.gender>=0?(r[cols.gender]?.trim()||''):'',
+      wc:     cols.wc>=0?(r[cols.wc]?.trim()||''):'',
+      team:   cols.team>=0?(r[cols.team]?.trim()||''):'',
+      gradYear: cols.gradYear>=0?(parseInt(r[cols.gradYear])||0):0,
+      snatch: cols.snatch>=0?(parseInt(r[cols.snatch])||0):0,
+      cj:     cols.cj>=0?(parseInt(r[cols.cj])||0):0,
+      bench:  cols.bench>=0?(parseInt(r[cols.bench])||0):0,
+    };
+    if(!state.roster.athletes) state.roster.athletes=[];
+    // Skip exact duplicate names
+    if(!state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase())){
+      state.roster.athletes.push(a); added++;
+    } else { skipped++; }
+  });
+  closeModal(); saveState(); renderMain();
+  if(skipped>0) alert(`Imported ${added} athlete${added!==1?'s':''}. ${skipped} skipped (duplicate names or empty rows).`);
 }
 
 function openAddAthlete() {
@@ -2536,6 +3254,7 @@ function saveState() {
       programs: state.programs,
       roster: state.roster,
       templates: state.templates,
+      exerciseLibrary: state.exerciseLibrary,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     showSaveBadge();
@@ -2562,6 +3281,7 @@ function loadState() {
       }
       if (payload.roster) state.roster = payload.roster;
       if (payload.templates) state.templates = payload.templates;
+      if (payload.exerciseLibrary) state.exerciseLibrary = payload.exerciseLibrary;
       return true;
     }
   } catch(e) {
@@ -2595,21 +3315,43 @@ function openDuplicateWeek() {
   const ws = weekNums();
   if (!ws.length) { alert('No weeks to duplicate.'); return; }
   const next = Math.max(...ws) + 1;
+  const curPhase = getWeek(state.currentWeek)?.phase || 'intensification';
   document.getElementById('modal-body').innerHTML = `
     <h3>Duplicate Week ${state.currentWeek}</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">Creates an exact copy of Week ${state.currentWeek} — all days, exercises, and mobility blocks — so you can adjust from there.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">Creates a copy of Week ${state.currentWeek}. Optionally apply a progression rule to all exercises.</p>
     <div class="fg2">
       <div class="form-field"><label>Copy to week #</label><input type="number" id="dup-wk" value="${next}" min="1" max="52"></div>
       <div class="form-field"><label>Training phase</label>
         <select id="dup-phase">
-          <option value="accumulation">Accumulation — 65–75%</option>
-          <option value="intensification" ${(getWeek(state.currentWeek)?.phase||'intensification')==='intensification'?'selected':''}>Intensification — 75–85%</option>
-          <option value="realization">Realization — 85–95%</option>
-          <option value="deload">Deload — recovery</option>
+          <option value="accumulation" ${curPhase==='accumulation'?'selected':''}>Accumulation — 65–75%</option>
+          <option value="intensification" ${curPhase==='intensification'?'selected':''}>Intensification — 75–85%</option>
+          <option value="realization" ${curPhase==='realization'?'selected':''}>Realization — 85–95%</option>
+          <option value="deload" ${curPhase==='deload'?'selected':''}>Deload — recovery</option>
         </select>
       </div>
     </div>
     <div class="form-field"><label>Coach note for new week (optional)</label><input type="text" id="dup-note" placeholder="Leave blank to copy existing note"></div>
+    <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;padding:10px 12px;margin-bottom:.75rem;">
+      <div style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">Auto-Progression (applied to all exercises)</div>
+      <div class="fg2" style="gap:8px;">
+        <div class="form-field" style="margin:0;">
+          <label>Intensity adjustment</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input type="number" id="dup-int-adj" value="0" step="0.5" style="width:80px;text-align:center;background:var(--black);border:1px solid var(--dark3);border-radius:3px;padding:5px 6px;color:var(--white);font-size:14px;">
+            <span style="font-size:12px;color:var(--muted);">% (e.g. +2.5)</span>
+          </div>
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label>Sets adjustment</label>
+          <select id="dup-sets-adj" style="background:var(--black);border:1px solid var(--dark3);border-radius:3px;padding:5px 6px;color:var(--white);font-size:13px;width:100%;">
+            <option value="0">No change</option>
+            <option value="1">+1 set each group</option>
+            <option value="-1">−1 set each group</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Intensity 0 (BW) and RPE exercises are skipped. Sets floor at 1.</div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-gold" onclick="saveDuplicateWeek()">Duplicate</button>
@@ -2628,8 +3370,32 @@ function saveDuplicateWeek() {
   const phase = document.getElementById('dup-phase').value;
   const noteInput = document.getElementById('dup-note').value.trim();
   const note = noteInput || srcWd.note || '';
+  const intAdj = parseFloat(document.getElementById('dup-int-adj').value) || 0;
+  const setsAdj = parseInt(document.getElementById('dup-sets-adj').value) || 0;
   // Deep copy the source week's days
   const daysCopy = JSON.parse(JSON.stringify(srcWd.days));
+  // Apply progression rules
+  if (intAdj !== 0 || setsAdj !== 0) {
+    Object.values(daysCopy).forEach(d => {
+      (d.exercises||[]).forEach(ex => {
+        if (ex.setGroups && !ex.isComplex && !ex.isSuperset && !ex.useRPE) {
+          ex.setGroups = ex.setGroups.map(sg => {
+            const newSets = setsAdj !== 0 ? Math.max(1, (sg.sets||1) + setsAdj) : sg.sets;
+            const newInt = (intAdj !== 0 && (sg.intensity||0) > 0)
+              ? Math.round(Math.min(115, Math.max(0, (sg.intensity||0) + intAdj)) * 10) / 10 : sg.intensity;
+            const newHi = (intAdj !== 0 && (sg.intensityHigh||0) > 0)
+              ? Math.round(Math.min(115, (sg.intensityHigh + intAdj)) * 10) / 10 : sg.intensityHigh;
+            return {...sg, sets:newSets, intensity:newInt, intensityHigh:newHi||0};
+          });
+          const totalSets = ex.setGroups.reduce((s,sg)=>s+sg.sets,0);
+          const wInt = ex.setGroups.reduce((s,sg)=>{const lo=sg.intensity||0;const hi=sg.intensityHigh||lo;return s+((lo+hi)/2)*sg.sets;},0);
+          ex.intensity = totalSets>0 ? Math.round(wInt/totalSets) : 0;
+          ex.sets = totalSets;
+          ex.volume = ex.useTime ? 0 : ex.setGroups.reduce((s,sg)=>s+sg.sets*(sg.reps||0),0);
+        }
+      });
+    });
+  }
   prog().weeks[destW] = { note, phase, days: daysCopy };
   state.currentWeek = destW;
   closeModal();
