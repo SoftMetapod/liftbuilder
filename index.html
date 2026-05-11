@@ -425,7 +425,9 @@ function renderProgToolbar() {
   bar.innerHTML = `
     <button class="btn-ghost" onclick="changeWeek(-1)" style="font-size:18px;padding:2px 6px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--muted);">‹</button>
     <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--white);white-space:nowrap;">Week ${state.currentWeek||'—'}</span>
-    ${wd?`<span class="phase-badge phase-${phase}" style="font-size:10px;padding:2px 7px;">${PHASES[phase]||phase}</span>`:''}
+    ${wd?`<select onchange="setWeekPhase(${state.currentWeek},this.value)" class="phase-badge phase-${phase}" style="font-size:10px;padding:2px 7px;border:none;cursor:pointer;appearance:none;-webkit-appearance:none;background:inherit;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;">
+      ${Object.entries(PHASES).map(([k,v])=>`<option value="${k}" ${k===phase?'selected':''}>${v}</option>`).join('')}
+    </select>`:''}${wd?`<style>#prog-bar select.phase-badge option{background:var(--dark2);color:var(--white);text-transform:none;letter-spacing:0;font-size:13px;}</style>`:''}${''}
     <button class="btn-ghost" onclick="changeWeek(1)" style="font-size:18px;padding:2px 6px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--muted);">›</button>
     <div class="prog-toolbar-sep"></div>
     <button onclick="openManageDays()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;">⚙ Days</button>
@@ -1141,22 +1143,14 @@ function buildPDF(weekNums, inclMobility) {
     y += 16;
   }
 
-  function drawWeekHeader(wNum, phase) {
+  function drawWeekHeader(wNum) {
     checkPage(50);
-    const phaseLabel = PHASES[phase] || phase || '';
-    // Dark background band
     doc.setFillColor(...DARK);
     doc.roundedRect(ML, y, CW, 28, 3, 3, 'F');
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(242, 217, 138); // gold-light
+    doc.setTextColor(242, 217, 138);
     doc.text(`WEEK ${wNum}`, ML + 10, y + 18);
-    if (phaseLabel) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...GOLD);
-      doc.text(phaseLabel.toUpperCase(), PW - MR - 10, y + 18, { align: 'right' });
-    }
     y += 36;
   }
 
@@ -1183,9 +1177,9 @@ function buildPDF(weekNums, inclMobility) {
     const rowH = 18;
     const mobH = inclMob && dd.mobility ? Math.ceil(dd.mobility.length / 90) * 12 + 24 : 0;
     const blockH = 24 + dd.exercises.reduce((s, ex) => {
-      if (ex.isSuperset && ex.supersetExercises) return s + rowH + (ex.supersetExercises.length - 1) * 12 + 4;
+      if (ex.isSuperset && ex.supersetExercises) return s + rowH + ex.supersetExercises.length * 12 + 4;
       if (ex.isComplex && ex.movements) return s + rowH + ex.movements.length * 12 + 4;
-      if (!ex.isComplex && ex.setGroups && ex.setGroups.length > 1) return s + rowH + (ex.setGroups.length - 1) * 12 + 4;
+      if (!ex.isComplex && ex.setGroups && ex.setGroups.length > 1) return s + rowH + ex.setGroups.length * 12 + 4;
       return s + rowH;
     }, 0) + 16 + mobH;
     checkPage(Math.min(blockH, 180));
@@ -1224,7 +1218,7 @@ function buildPDF(weekNums, inclMobility) {
       const isEven = idx % 2 === 0;
       if (ex.isSuperset && ex.supersetExercises && ex.supersetExercises.length) {
         const LTRS=['A','B','C','D'];
-        const exH = rowH + (ex.supersetExercises.length - 1) * 12;
+        const exH = rowH + ex.supersetExercises.length * 12;
         checkPage(exH + 6);
         if (isEven) { doc.setFillColor(248, 250, 253); doc.rect(ML, y, CW, exH, 'F'); }
         doc.setFontSize(7);
@@ -1296,7 +1290,7 @@ function buildPDF(weekNums, inclMobility) {
         doc.line(ML, y + exH, PW - MR, y + exH);
         y += exH;
       } else if (!ex.isComplex && ex.setGroups && ex.setGroups.length > 1) {
-        const exH = rowH + (ex.setGroups.length - 1) * 12;
+        const exH = rowH + ex.setGroups.length * 12;
         checkPage(exH + 6);
         if (isEven) { doc.setFillColor(250, 250, 248); doc.rect(ML, y, CW, exH, 'F'); }
         const catRGB = CAT_COLORS_RGB[ex.category] || [80,80,80];
@@ -1391,10 +1385,12 @@ function buildPDF(weekNums, inclMobility) {
     const wd = getWeek(wNum);
     if (!wd) return;
     if (wi > 0) {
-      checkPage(80);
-      y += 8;
+      addFooter();
+      doc.addPage();
+      pageNum++;
+      y = MT;
     }
-    drawWeekHeader(wNum, wd.phase);
+    drawWeekHeader(wNum);
     drawCoachNote(wd.note);
     trainingDays().forEach(day => {
       drawDayBlock(day, wd.days[day], inclMobility);
@@ -1447,8 +1443,11 @@ function saveNewProgram() {
   const selected=[...document.getElementById('np-days').querySelectorAll('.day-pill.selected')].map(b=>b.textContent);
   const days=ALL_DAYS.filter(d=>selected.includes(d));
   if(!days.length){alert('Select at least one training day.');return;}
+  const season=document.getElementById('np-season').value.trim();
   const id=newProgId();
-  state.programs[id]={id,name,org,trainingDays:days,weeks:{}};
+  const week1days={};
+  days.forEach(d=>{week1days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
+  state.programs[id]={id,name,org,season,trainingDays:days,weeks:{1:{note:'',phase:'accumulation',days:week1days}}};
   state.activeProgId=id;
   state.currentWeek=1;
   state.activeTab='program';
@@ -1577,6 +1576,13 @@ function openAddWeek() {
       <button class="btn btn-gold" onclick="saveNewWeek()">Create week</button>
     </div>`;
   document.getElementById('overlay').style.display='flex';
+}
+
+function setWeekPhase(weekNum, phase) {
+  const wd=getWeek(weekNum); if(!wd) return;
+  wd.phase=phase;
+  saveState();
+  renderProgBar();
 }
 
 function saveNewWeek() {
@@ -3260,6 +3266,7 @@ function saveState() {
     showSaveBadge();
   } catch(e) {
     console.warn('LiftBuilder: could not save to localStorage', e);
+    alert('⚠️ Could not save your data. Your storage may be full. Please export a backup from the PDF export menu.');
   }
 }
 
