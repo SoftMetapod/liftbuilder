@@ -259,7 +259,7 @@ select option{background:#232323;}
 <div id="update-toast" style="display:none;position:fixed;bottom:20px;right:20px;background:var(--dark);border:1px solid var(--gold-a40);border-left:3px solid var(--gold);border-radius:6px;padding:12px 16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;">
   <div id="update-toast-msg" style="font-size:13px;color:var(--white);margin-bottom:8px;"></div>
   <div style="display:flex;gap:8px;">
-    <button id="update-toast-action" onclick="updateAction()" style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;padding:4px 12px;border-radius:3px;cursor:pointer;background:var(--gold);color:var(--black);border:none;"></button>
+    <button id="update-toast-action" onclick="updateAction()" style="display:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;padding:4px 12px;border-radius:3px;cursor:pointer;background:var(--gold);color:var(--black);border:none;"></button>
     <button onclick="document.getElementById('update-toast').style.display='none'" style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12px;padding:4px 10px;border-radius:3px;cursor:pointer;background:none;color:var(--muted);border:1px solid var(--dark3);">Dismiss</button>
   </div>
 </div>
@@ -4616,6 +4616,15 @@ function initApp() {
   deleteProgram = function(...a) { _origDeleteProgram(...a); saveState(); };
 }
 
+function showToast(msg, actionLabel) {
+  document.getElementById('update-toast-msg').textContent = msg;
+  const actionBtn = document.getElementById('update-toast-action');
+  if (actionLabel) { actionBtn.textContent = actionLabel; actionBtn.style.display = ''; }
+  else { actionBtn.style.display = 'none'; }
+  document.getElementById('update-toast').style.display = '';
+  if (!actionLabel) setTimeout(() => { document.getElementById('update-toast').style.display = 'none'; }, 3000);
+}
+
 initApp();
 
 // ═══════════════════════════════════════════════════
@@ -4635,11 +4644,7 @@ initApp();
   const btn = document.getElementById('update-btn');
   if (btn) { btn.style.display = ''; btn.textContent = 'Check for Updates'; }
 
-  function showToast(msg, actionLabel) {
-    document.getElementById('update-toast-msg').textContent = msg;
-    document.getElementById('update-toast-action').textContent = actionLabel;
-    document.getElementById('update-toast').style.display = '';
-  }
+  // showToast is defined globally below; reference it here so the updater can call it too
 
   window.updateAction = function() {
     api.openReleasesPage();
