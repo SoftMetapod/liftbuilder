@@ -303,20 +303,41 @@ const CAT_META={
 };
 
 // ═══════════════════════════════════════════════════
-//  STATE
+//  STATE  (multi-team)
 // ═══════════════════════════════════════════════════
-let state = {
+// Per-team data (programs / roster / meets) lives inside _stateCore.teams.
+// The `state` Proxy transparently routes reads/writes of state.programs,
+// state.roster, and state.meets to the currently active team's object,
+// so all existing code continues to work without modification.
+
+let _stateCore = {
+  activeTeamId: null,
+  teams: {},             // { [teamId]: { id, name, programs, roster, meets } }
   activeProgId: null,
   activeTab: 'program',
   currentWeek: 1,
   volWeek: null,
-  programs: {},
-  roster: { athletes: [], customFields: [] },
   templates: [],
   exerciseLibrary: [],
-  meets: [],
-  weightUnit: 'lbs'
+  weightUnit: 'lbs',
 };
+
+function team() { return _stateCore.teams[_stateCore.activeTeamId] || null; }
+
+const state = new Proxy(_stateCore, {
+  get(target, key) {
+    if (key === 'programs') { const t = team(); return t ? t.programs : {}; }
+    if (key === 'roster')   { const t = team(); return t ? (t.roster || {athletes:[],customFields:[]}) : {athletes:[],customFields:[]}; }
+    if (key === 'meets')    { const t = team(); return t ? (t.meets   || []) : []; }
+    return target[key];
+  },
+  set(target, key, value) {
+    if (key === 'programs') { const t = team(); if (t) t.programs = value; return true; }
+    if (key === 'roster')   { const t = team(); if (t) t.roster   = value; return true; }
+    if (key === 'meets')    { const t = team(); if (t) t.meets     = value; return true; }
+    target[key] = value; return true;
+  }
+});
 
 // ═══════════════════════════════════════════════════
 //  THEMES
@@ -449,6 +470,8 @@ function renderProgToolbar() {
 }
 
 let _progSectionOpen = true;
+let _hiddenVolCats = new Set(); // categories hidden in the volume legend filter
+let _volActiveCats = [];        // ordered category list for the current week (for index mapping)
 
 function renderSidebar() {
   const progs = Object.values(state.programs);
@@ -487,7 +510,21 @@ function renderSidebar() {
     progItems = progs.map(progRow).join('');
   }
 
-  document.getElementById('sidebar').innerHTML = `
+  const allTeams = Object.values(_stateCore.teams);
+  const teamSelector = `
+    <div style="padding:.7rem 1rem .6rem;border-bottom:1px solid var(--dark3);background:var(--dark2);">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:5px;">Team</div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <select onchange="switchTeam(this.value)" style="flex:1;background:var(--dark);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 7px;font-size:13px;font-family:'Barlow',sans-serif;min-width:0;">
+          ${allTeams.map(t=>`<option value="${t.id}" ${t.id===_stateCore.activeTeamId?'selected':''}>${t.name}</option>`).join('')}
+        </select>
+        <button onclick="openNewTeam()" title="New team" style="flex-shrink:0;background:var(--dark);border:1px solid var(--dark3);color:var(--gold);border-radius:4px;cursor:pointer;font-size:15px;line-height:1;padding:3px 7px;font-weight:700;">+</button>
+        <button onclick="openRenameTeam()" title="Rename team" style="flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 5px;" onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">✏</button>
+        ${allTeams.length>1?`<button onclick="confirmDeleteTeam()" title="Delete team" style="flex-shrink:0;background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:3px 5px;" onmouseenter="this.style.color='#E07070'" onmouseleave="this.style.color='#555'">✕</button>`:''}
+      </div>
+    </div>`;
+
+  document.getElementById('sidebar').innerHTML = teamSelector + `
     <div onclick="toggleProgSection()" style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem .4rem;cursor:pointer;user-select:none;" onmouseenter="this.style.background='var(--dark2)'" onmouseleave="this.style.background=''">
       <span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;">Programs</span>
       <span style="font-size:11px;color:var(--muted);transition:transform .2s;display:inline-block;transform:${_progSectionOpen?'rotate(0deg)':'rotate(-90deg)'};">▾</span>
@@ -549,6 +586,7 @@ function switchProgram(id) {
   state.currentWeek=weekNums()[0]||1;
   state.volWeek=null;
   state.activeTab='program';
+  _hiddenVolCats.clear(); // don't bleed legend filters across programs
   render();
 }
 
@@ -802,8 +840,11 @@ function buildVolumeHTML() {
     </div>
     ${weekNav}
     <div class="metrics-row" id="vol-metrics"></div>
-    <div class="chart-label">Lift category breakdown — Week <span id="breakdown-wk">${vw||'—'}</span></div>
-    <div class="legend-row" id="cat-legend"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;">
+      <div class="chart-label" style="margin:0;">Lift category breakdown — Week <span id="breakdown-wk">${vw||'—'}</span></div>
+      <div style="font-size:11px;color:var(--muted);">Click legend to filter</div>
+    </div>
+    <div class="legend-row" id="cat-legend" style="margin-bottom:.75rem;"></div>
     <div class="charts-2col">
       <div class="chart-card">
         <div style="font-size:10px;color:var(--muted);margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px;text-transform:uppercase;">Volume by category (reps)</div>
@@ -815,12 +856,21 @@ function buildVolumeHTML() {
       </div>
     </div>
     <div class="chart-section">
-      <div class="chart-label">All weeks — total reps</div>
-      <div class="chart-card"><div class="chart-wrap"><canvas id="volChart"></canvas></div></div>
+      <div class="chart-label" style="margin-bottom:.4rem;">Category volume trend — all weeks</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:.6rem;">Click a point or bar to jump to that week</div>
+      <div class="chart-card"><div class="chart-wrap" style="height:220px;"><canvas id="catTrendChart"></canvas></div></div>
     </div>
-    <div class="chart-section">
-      <div class="chart-label">All weeks — average intensity (%1RM)</div>
-      <div class="chart-card"><div class="chart-wrap"><canvas id="intChart"></canvas></div></div>
+    <div class="charts-2col">
+      <div class="chart-section">
+        <div class="chart-label" style="margin-bottom:.4rem;">Total reps — all weeks</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:.6rem;">Click a bar to jump to that week</div>
+        <div class="chart-card"><div class="chart-wrap"><canvas id="volChart"></canvas></div></div>
+      </div>
+      <div class="chart-section">
+        <div class="chart-label" style="margin-bottom:.4rem;">Avg intensity — all weeks</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:.6rem;">Click a point to jump to that week</div>
+        <div class="chart-card"><div class="chart-wrap"><canvas id="intChart"></canvas></div></div>
+      </div>
     </div>`;
 }
 
@@ -847,10 +897,19 @@ function initVolumeCharts() {
     <div class="metric-card"><div class="metric-label">Clean/Jerk vol</div><div class="metric-value" style="color:#3A86D4;">${(cats['clean']||0)+(cats['jerk']||0)+(cats['cj']||0)}</div><div class="metric-sub">reps — week ${vw}</div></div>
     <div class="metric-card"><div class="metric-label">Bench vol</div><div class="metric-value" style="color:#C06060;">${cats['bench']||0}</div><div class="metric-sub">reps — week ${vw}</div></div>`;
 
+  // ── Clickable legend filter ──
   const activeCats=Object.keys(cats).filter(c=>cats[c]>0);
+  _volActiveCats=activeCats;
   document.getElementById('cat-legend').innerHTML=activeCats.map(c=>`
-    <div class="legend-item"><div class="legend-dot" style="background:${CAT_META[c]?CAT_META[c].color:'#888'};"></div>${CAT_META[c]?CAT_META[c].label:c}</div>`).join('');
+    <div class="legend-item" data-volcat="${c}" onclick="toggleVolCat('${c}')"
+      style="cursor:pointer;padding:3px 8px 3px 4px;border-radius:3px;transition:opacity .15s;opacity:${_hiddenVolCats.has(c)?'0.35':'1'};${_hiddenVolCats.has(c)?'text-decoration:line-through;':''}"
+      title="Click to show/hide ${CAT_META[c]?CAT_META[c].label:c}"
+      onmouseenter="this.style.background='var(--dark3)'" onmouseleave="this.style.background=''">
+      <div class="legend-dot" style="background:${CAT_META[c]?CAT_META[c].color:'#888'};"></div>
+      ${CAT_META[c]?CAT_META[c].label:c}
+    </div>`).join('');
 
+  // ── Category breakdown bar + donut ──
   charts[pid].catVol=new Chart(document.getElementById('catVolChart'),{
     type:'bar',
     data:{labels:activeCats.map(c=>CAT_META[c]?CAT_META[c].label:c),datasets:[{data:activeCats.map(c=>cats[c]),backgroundColor:activeCats.map(c=>CAT_META[c]?CAT_META[c].color:'#888'),borderRadius:4,borderSkipped:false}]},
@@ -864,27 +923,130 @@ function initVolumeCharts() {
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed} reps`}}},cutout:'60%'}
   });
 
-  // highlight selected week in bar charts
+  // Re-apply hidden categories (preserved across week navigation)
+  activeCats.forEach((cat,idx)=>{
+    if(_hiddenVolCats.has(cat)){
+      ['catVol','catPie'].forEach(k=>{
+        const meta=charts[pid][k]?.getDatasetMeta(0);
+        if(meta?.data[idx]) meta.data[idx].hidden=true;
+      });
+    }
+  });
+  charts[pid].catVol.update('none');
+  charts[pid].catPie.update('none');
+
+  // ── Per-category trend across all weeks ──
+  // Build union of categories that have any volume across all weeks
+  const trendCatSet=new Set();
+  ws.forEach(w=>{const cv=catVolumes(w);Object.keys(cv).forEach(c=>{if(cv[c]>0)trendCatSet.add(c);});});
+  const trendCats=[...trendCatSet];
   const ac=_theme.accent, acFade=hexToRgba(ac,0.35);
+
+  charts[pid].catTrend=new Chart(document.getElementById('catTrendChart'),{
+    type:'line',
+    data:{
+      labels:ws.map(w=>'Wk '+w),
+      datasets:trendCats.map(cat=>({
+        label:CAT_META[cat]?CAT_META[cat].label:cat,
+        data:ws.map(w=>catVolumes(w)[cat]||0),
+        borderColor:CAT_META[cat]?CAT_META[cat].color:'#888',
+        backgroundColor:hexToRgba(CAT_META[cat]?CAT_META[cat].color:'#888',0.08),
+        fill:false,tension:0.3,
+        borderWidth:2,
+        pointBackgroundColor:ws.map(w=>w===vw?(CAT_META[cat]?CAT_META[cat].color:'#888'):'transparent'),
+        pointBorderColor:ws.map(w=>w===vw?(CAT_META[cat]?CAT_META[cat].color:'#888'):'transparent'),
+        pointRadius:ws.map(w=>w===vw?6:3),
+        pointHoverRadius:7,
+      }))
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,labels:{color:'#888',font:{size:11,family:'Barlow Condensed'},boxWidth:10,padding:14}},
+        tooltip:{callbacks:{title:ctx=>`Week ${ws[ctx[0].dataIndex]}`,label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y} reps`}}
+      },
+      scales:{
+        x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'#888'},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}
+      },
+      onClick:(evt,elements)=>{
+        if(!elements.length) return;
+        const idx=elements[0].index;
+        if(ws[idx]!=null){state.volWeek=ws[idx];renderMain();}
+      },
+      onHover:(evt,elements)=>{
+        evt.native.target.style.cursor=elements.length?'pointer':'default';
+      }
+    }
+  });
+
+  // ── All-weeks total reps — clickable bars ──
   const barColors=ws.map(w=>w===vw?ac:acFade);
   charts[pid].vol=new Chart(document.getElementById('volChart'),{
     type:'bar',
-    data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(totalVol),backgroundColor:barColors,borderRadius:4,borderSkipped:false}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},y:{ticks:{color:'#888'},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}}}
+    data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(totalVol),backgroundColor:barColors,borderRadius:4,borderSkipped:false,hoverBackgroundColor:ws.map(w=>w===vw?_theme.light:ac)}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:ctx=>`Week ${ws[ctx[0].dataIndex]}`,label:ctx=>` ${ctx.parsed.y} reps`}}},
+      scales:{x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},y:{ticks:{color:'#888'},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}},
+      onClick:(evt,elements)=>{
+        if(!elements.length) return;
+        const idx=elements[0].index;
+        if(ws[idx]!=null){state.volWeek=ws[idx];renderMain();}
+      },
+      onHover:(evt,elements)=>{
+        evt.native.target.style.cursor=elements.length?'pointer':'default';
+      }
+    }
   });
 
+  // ── All-weeks intensity — clickable points ──
   charts[pid].int=new Chart(document.getElementById('intChart'),{
     type:'line',
     data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(avgInt),borderColor:ac,backgroundColor:hexToRgba(ac,0.08),fill:true,tension:0.3,
       pointBackgroundColor:ws.map(w=>w===vw?ac:hexToRgba(ac,0.4)),
       pointRadius:ws.map(w=>w===vw?6:4),
+      pointHoverRadius:8,
       pointBorderColor:ws.map(w=>w===vw?_theme.light:'transparent'),
       pointBorderWidth:2
     }]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},y:{min:50,max:100,ticks:{color:'#888',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:ctx=>`Week ${ws[ctx[0].dataIndex]}`,label:ctx=>` ${ctx.parsed.y}% avg intensity`}}},
+      scales:{x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},y:{min:50,max:100,ticks:{color:'#888',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}}},
+      onClick:(evt,elements)=>{
+        if(!elements.length) return;
+        const idx=elements[0].index;
+        if(ws[idx]!=null){state.volWeek=ws[idx];renderMain();}
+      },
+      onHover:(evt,elements)=>{
+        evt.native.target.style.cursor=elements.length?'pointer':'default';
+      }
+    }
   });
+}
+
+function toggleVolCat(cat) {
+  if(_hiddenVolCats.has(cat)) _hiddenVolCats.delete(cat);
+  else _hiddenVolCats.add(cat);
+
+  const pid=state.activeProgId;
+  const idx=_volActiveCats.indexOf(cat);
+  if(idx>=0){
+    ['catVol','catPie'].forEach(k=>{
+      const ch=charts[pid]?.[k]; if(!ch) return;
+      const meta=ch.getDatasetMeta(0);
+      if(meta.data[idx]) meta.data[idx].hidden=_hiddenVolCats.has(cat);
+      ch.update();
+    });
+  }
+
+  // Update legend visual without full re-render
+  const el=document.querySelector(`[data-volcat="${cat}"]`);
+  if(el){
+    el.style.opacity=_hiddenVolCats.has(cat)?'0.35':'1';
+    el.style.textDecoration=_hiddenVolCats.has(cat)?'line-through':'none';
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1490,7 +1652,11 @@ function saveEditProgram(pid) {
 
 function clearAllData() {
   if (!confirm('Delete ALL saved programs and start fresh? This cannot be undone.')) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({cleared: true, programs: {}}));
+  const teamId = 'team_1';
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    activeTeamId: teamId,
+    teams: { [teamId]: { id: teamId, name: 'Team 1', programs: {}, roster: { athletes: [], customFields: [] }, meets: [] } }
+  }));
   location.reload();
 }
 
@@ -1506,6 +1672,117 @@ function deleteProgram(pid) {
 // ── Toggle day pill helper ──
 function togglePill(el,day) {
   el.classList.toggle('selected');
+}
+
+// ═══════════════════════════════════════════════════
+//  TEAM MANAGEMENT
+// ═══════════════════════════════════════════════════
+function _createDefaultTeam() {
+  const id = 'team_1';
+  _stateCore.teams[id] = { id, name: 'Team 1', programs: {}, roster: { athletes: [], customFields: [] }, meets: [] };
+  _stateCore.activeTeamId = id;
+}
+
+function _ensureTeamInit(t) {
+  if (!t.programs) t.programs = {};
+  if (!t.roster) t.roster = { athletes: [], customFields: [] };
+  if (!t.roster.athletes) t.roster.athletes = [];
+  if (!t.roster.customFields) t.roster.customFields = [];
+  if (!t.meets) t.meets = [];
+  // Assign IDs to athletes that predate the ID field
+  t.roster.athletes.forEach(a => {
+    if (!a.id) a.id = 'ath_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+  });
+}
+
+function switchTeam(id) {
+  if (!_stateCore.teams[id]) return;
+  _stateCore.activeTeamId = id;
+  const progs = Object.keys(state.programs);
+  state.activeProgId = progs[0] || null;
+  if (state.activeProgId) {
+    const ws = Object.keys(state.programs[state.activeProgId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
+    state.currentWeek = ws[0] || 1;
+  } else {
+    state.currentWeek = 1;
+  }
+  state.activeTab = 'program';
+  _rosterSel.clear();       // don't carry over selections from previous team
+  _hiddenVolCats.clear();   // don't carry over volume legend filters
+  _activeMeetId = null;     // don't open a meet that belongs to the previous team
+  _attAthleteId = '';       // don't preselect an athlete from the previous team
+  saveState();
+  render();
+}
+
+function openNewTeam() {
+  document.getElementById('modal-body').innerHTML = `
+    <h3>New Team</h3>
+    <div class="form-field">
+      <label>Team Name</label>
+      <input type="text" id="new-team-name" placeholder="e.g. Varsity Girls" style="font-size:15px;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveNewTeam()">Create Team</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('new-team-name')?.focus(), 50);
+}
+
+function saveNewTeam() {
+  const name = document.getElementById('new-team-name').value.trim();
+  if (!name) { alert('Enter a team name.'); return; }
+  const id = 'team_' + Date.now();
+  _stateCore.teams[id] = { id, name, programs: {}, roster: { athletes: [], customFields: [] }, meets: [] };
+  _stateCore.activeTeamId = id;
+  state.activeProgId = null;
+  state.currentWeek = 1;
+  state.activeTab = 'program';
+  saveState();
+  closeModal();
+  render();
+}
+
+function openRenameTeam() {
+  const t = team(); if (!t) return;
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Rename Team</h3>
+    <div class="form-field">
+      <label>Team Name</label>
+      <input type="text" id="rename-team-name" value="${t.name}" style="font-size:15px;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveRenameTeam()">Save</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+  setTimeout(() => { const el = document.getElementById('rename-team-name'); if (el) { el.focus(); el.select(); } }, 50);
+}
+
+function saveRenameTeam() {
+  const name = document.getElementById('rename-team-name').value.trim();
+  if (!name) { alert('Enter a team name.'); return; }
+  const t = team(); if (t) t.name = name;
+  saveState();
+  closeModal();
+  renderSidebar();
+}
+
+function confirmDeleteTeam() {
+  const t = team(); if (!t) return;
+  if (Object.keys(_stateCore.teams).length <= 1) { alert('Cannot delete the only team.'); return; }
+  if (!confirm(`Delete "${t.name}"?\n\nThis will permanently remove all programs, roster, and meets for this team.`)) return;
+  delete _stateCore.teams[_stateCore.activeTeamId];
+  _stateCore.activeTeamId = Object.keys(_stateCore.teams)[0];
+  state.activeProgId = Object.keys(state.programs)[0] || null;
+  if (state.activeProgId) {
+    const ws = Object.keys(state.programs[state.activeProgId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
+    state.currentWeek = ws[0] || 1;
+  }
+  state.activeTab = 'program';
+  saveState();
+  render();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3336,6 +3613,7 @@ function confirmImportRoster() {
       :(cols.name>=0?r[cols.name]?.trim():'');
     if(!name){skipped++;return;}
     const a={
+      id: 'ath_'+Date.now()+'_'+Math.floor(Math.random()*9999),
       name,
       gender: cols.gender>=0?(r[cols.gender]?.trim()||''):'',
       wc:     cols.wc>=0?(r[cols.wc]?.trim()||''):'',
@@ -3349,7 +3627,7 @@ function confirmImportRoster() {
     const existing = state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase());
     if (existing) {
       // Update existing athlete with any non-zero imported values
-      Object.keys(a).forEach(k=>{ if(k!=='name' && a[k]) existing[k]=a[k]; });
+      Object.keys(a).forEach(k=>{ if(k!=='name' && k!=='id' && a[k]) existing[k]=a[k]; });
       skipped++;
     } else {
       state.roster.athletes.push(a); added++;
@@ -3401,7 +3679,9 @@ function saveAthlete(idx) {
   const name=document.getElementById('af-name').value.trim();
   if(!name){alert('Please enter athlete name.');return;}
   const fields=rosterFields();
+  const existing=idx>=0?state.roster.athletes[idx]:null;
   const a={
+    id: existing?.id || ('ath_'+Date.now()+'_'+Math.floor(Math.random()*9999)),
     name,
     gender: document.getElementById('af-gender').value,
     wc:     document.getElementById('af-wc').value,
@@ -3907,12 +4187,11 @@ function saveState() {
   try { const cur = localStorage.getItem(STORAGE_KEY); if(cur) _undoSnapshot = cur; } catch(e) {}
   try {
     const payload = {
+      activeTeamId: _stateCore.activeTeamId,
+      teams: _stateCore.teams,
       activeProgId: state.activeProgId,
-      programs: state.programs,
-      roster: state.roster,
       templates: state.templates,
       exerciseLibrary: state.exerciseLibrary,
-      meets: state.meets,
       weightUnit: state.weightUnit,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -3941,44 +4220,81 @@ function undo() {
   } catch(e) { console.warn('undo failed', e); }
 }
 
+function _migrateAccessories(programs) {
+  const ACC_CATS = new Set(['accessory','core','plyo','other']);
+  Object.values(programs||{}).forEach(prog => {
+    Object.values(prog.weeks||{}).forEach(week => {
+      Object.values(week.days||{}).forEach(day => {
+        if (!day.accessories) day.accessories = [];
+        const toMove = [];
+        day.exercises = (day.exercises||[]).filter(ex => {
+          if (ACC_CATS.has(ex.category)) { toMove.push(ex); return false; }
+          return true;
+        });
+        day.accessories = [...day.accessories, ...toMove];
+      });
+    });
+  });
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const payload = JSON.parse(raw);
-    if (payload && typeof payload.programs !== 'undefined') {
-      state.programs = payload.programs || {};
+    if (!payload) return false;
+
+    if (payload.teams) {
+      // ── New multi-team format ──
+      _stateCore.teams = payload.teams || {};
+      _stateCore.activeTeamId = payload.activeTeamId || Object.keys(_stateCore.teams)[0] || null;
+      if (payload.activeProgId) state.activeProgId = payload.activeProgId;
+      if (payload.templates) state.templates = payload.templates;
+      if (payload.exerciseLibrary) state.exerciseLibrary = payload.exerciseLibrary;
+      if (payload.weightUnit) state.weightUnit = payload.weightUnit;
+      // Ensure active team exists and is initialized
+      if (!_stateCore.activeTeamId || !_stateCore.teams[_stateCore.activeTeamId]) {
+        _stateCore.activeTeamId = Object.keys(_stateCore.teams)[0] || null;
+      }
+      Object.values(_stateCore.teams).forEach(t => {
+        _ensureTeamInit(t);
+        _migrateAccessories(t.programs);
+      });
+      // Validate active prog
+      if (state.activeProgId && !state.programs[state.activeProgId]) {
+        state.activeProgId = Object.keys(state.programs)[0] || null;
+      }
+    } else if (typeof payload.programs !== 'undefined') {
+      // ── Old single-team format — migrate to Team 1 ──
+      const teamId = 'team_1';
+      _stateCore.teams = {
+        [teamId]: {
+          id: teamId, name: 'Team 1',
+          programs: payload.programs || {},
+          roster: payload.roster || { athletes: [], customFields: [] },
+          meets: payload.meets || []
+        }
+      };
+      _stateCore.activeTeamId = teamId;
+      _ensureTeamInit(_stateCore.teams[teamId]);
+      _migrateAccessories(_stateCore.teams[teamId].programs);
       if (payload.activeProgId && state.programs[payload.activeProgId]) {
         state.activeProgId = payload.activeProgId;
       } else {
         state.activeProgId = Object.keys(state.programs)[0] || null;
       }
-      if (state.activeProgId) {
-        const ws = Object.keys(state.programs[state.activeProgId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
-        state.currentWeek = ws[0] || 1;
-      }
-      if (payload.roster) state.roster = payload.roster;
       if (payload.templates) state.templates = payload.templates;
       if (payload.exerciseLibrary) state.exerciseLibrary = payload.exerciseLibrary;
-      if (payload.meets) state.meets = payload.meets;
       if (payload.weightUnit) state.weightUnit = payload.weightUnit;
-      // Migrate: move accessory-category exercises from exercises[] to accessories[]
-      Object.values(state.programs).forEach(prog=>{
-        Object.values(prog.weeks||{}).forEach(week=>{
-          Object.values(week.days||{}).forEach(day=>{
-            if(!day.accessories) day.accessories=[];
-            const toMove=[];
-            const ACC_CATS=new Set(['accessory','core','plyo','other']);
-            day.exercises=(day.exercises||[]).filter(ex=>{
-              if(ACC_CATS.has(ex.category)){toMove.push(ex);return false;}
-              return true;
-            });
-            day.accessories=[...day.accessories,...toMove];
-          });
-        });
-      });
-      return true;
+    } else {
+      return false;
     }
+
+    if (state.activeProgId && state.programs[state.activeProgId]) {
+      const ws = Object.keys(state.programs[state.activeProgId].weeks || {}).map(Number).sort((a,b)=>a-b);
+      state.currentWeek = ws[0] || 1;
+    }
+    return true;
   } catch(e) {
     console.warn('LiftBuilder: could not load saved state', e);
   }
@@ -4086,13 +4402,14 @@ function _doImportPrograms(programs) {
 function exportDataJSON() {
   const payload = {
     _liftbuilder: true,
-    version: '2.1.0',
+    version: '3.2.0',
     exported: new Date().toISOString(),
-    programs: state.programs,
-    roster: state.roster,
+    activeTeamId: _stateCore.activeTeamId,
+    teams: _stateCore.teams,
+    activeProgId: state.activeProgId,
     templates: state.templates,
     exerciseLibrary: state.exerciseLibrary,
-    meets: state.meets,
+    weightUnit: state.weightUnit,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -4112,16 +4429,30 @@ function importDataJSON() {
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!data._liftbuilder && !data.programs) { alert('Not a valid LiftBuilder backup file.'); return; }
-        const progCount = Object.keys(data.programs||{}).length;
+        if (!data._liftbuilder && !data.programs && !data.teams) { alert('Not a valid LiftBuilder backup file.'); return; }
         const dateStr = data.exported ? new Date(data.exported).toLocaleDateString() : 'unknown date';
-        if (!confirm(`Import backup from ${dateStr}?\n${progCount} program(s), ${(data.roster?.athletes||[]).length} athletes.\n\nThis will REPLACE all current data.`)) return;
-        state.programs = data.programs || {};
-        state.roster = data.roster || {athletes:[],customFields:[]};
+        if (data.teams) {
+          // New multi-team format
+          const teamCount = Object.keys(data.teams).length;
+          if (!confirm(`Import backup from ${dateStr}?\n${teamCount} team(s).\n\nThis will REPLACE all current data.`)) return;
+          _stateCore.teams = data.teams;
+          _stateCore.activeTeamId = data.activeTeamId || Object.keys(data.teams)[0];
+          Object.values(_stateCore.teams).forEach(t => { _ensureTeamInit(t); _migrateAccessories(t.programs); });
+          state.activeProgId = data.activeProgId || Object.keys(state.programs)[0] || null;
+        } else {
+          // Old flat format — migrate to Team 1
+          const progCount = Object.keys(data.programs||{}).length;
+          if (!confirm(`Import backup from ${dateStr}?\n${progCount} program(s), ${(data.roster?.athletes||[]).length} athletes.\n\nThis will REPLACE all current data.`)) return;
+          const teamId = 'team_1';
+          _stateCore.teams = { [teamId]: { id: teamId, name: 'Team 1', programs: data.programs||{}, roster: data.roster||{athletes:[],customFields:[]}, meets: data.meets||[] } };
+          _stateCore.activeTeamId = teamId;
+          _ensureTeamInit(_stateCore.teams[teamId]);
+          _migrateAccessories(_stateCore.teams[teamId].programs);
+          state.activeProgId = Object.keys(state.programs)[0] || null;
+        }
         state.templates = data.templates || [];
         state.exerciseLibrary = data.exerciseLibrary || [];
-        state.meets = data.meets || [];
-        state.activeProgId = Object.keys(state.programs)[0] || null;
+        if (data.weightUnit) state.weightUnit = data.weightUnit;
         state.currentWeek = 1;
         state.activeTab = 'program';
         saveState();
@@ -4249,6 +4580,10 @@ function saveDuplicateWeek() {
 // ── Init ──
 function initApp() {
   loadState();
+  // Ensure we always have at least one team
+  if (!_stateCore.activeTeamId || !_stateCore.teams[_stateCore.activeTeamId]) {
+    _createDefaultTeam();
+  }
   render();
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); } });
   // Auto-save on any state change — patch key mutating functions
