@@ -2383,8 +2383,8 @@ function renderCalcTable() {
 function roundAttempt(weight) {
   if (!weight || weight <= 0) return null;
   return state.weightUnit === 'kg'
-    ? Math.round(weight / 0.5) * 0.5   // 0.5kg precision
-    : Math.round(weight / 2.5) * 2.5;  // 2.5lb precision
+    ? Math.round(weight)         // 1kg precision
+    : Math.round(weight / 5) * 5; // 5lb precision
 }
 
 function buildAttemptsHTML() {
@@ -2407,7 +2407,7 @@ function buildAttemptsHTML() {
         </div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem;">
       <div class="form-field" style="margin-bottom:0;">
         <label>Snatch Max (${unit})</label>
         <input type="number" id="att-snatch" placeholder="0" min="0" oninput="renderAttemptTable()"
@@ -2416,6 +2416,11 @@ function buildAttemptsHTML() {
       <div class="form-field" style="margin-bottom:0;">
         <label>Clean &amp; Jerk Max (${unit})</label>
         <input type="number" id="att-cj" placeholder="0" min="0" oninput="renderAttemptTable()"
+          style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:7px 10px;font-size:15px;width:100%;text-align:center;">
+      </div>
+      <div class="form-field" style="margin-bottom:0;">
+        <label>Bench Max (${unit})</label>
+        <input type="number" id="att-bench" placeholder="0" min="0" oninput="renderAttemptTable()"
           style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:7px 10px;font-size:15px;width:100%;text-align:center;">
       </div>
     </div>
@@ -2430,8 +2435,10 @@ function loadAthleteIntoAttempts() {
   const conv = state.weightUnit==='lbs' ? 2.20462 : 1;
   const sEl = document.getElementById('att-snatch');
   const cEl = document.getElementById('att-cj');
+  const bEl = document.getElementById('att-bench');
   if (sEl) sEl.value = a.snatch ? Math.round(a.snatch*conv) : '';
   if (cEl) cEl.value = a.cj ? Math.round(a.cj*conv) : '';
+  if (bEl) bEl.value = a.bench ? Math.round(a.bench*conv) : '';
   renderAttemptTable();
 }
 
@@ -2439,7 +2446,8 @@ function renderAttemptTable() {
   const wrap = document.getElementById('att-table-wrap'); if (!wrap) return;
   const sMax = parseFloat(document.getElementById('att-snatch')?.value)||0;
   const cMax = parseFloat(document.getElementById('att-cj')?.value)||0;
-  if (!sMax && !cMax) { wrap.innerHTML='<div class="empty-msg">Enter at least one max to see attempts.</div>'; return; }
+  const bMax = parseFloat(document.getElementById('att-bench')?.value)||0;
+  if (!sMax && !cMax && !bMax) { wrap.innerHTML='<div class="empty-msg">Enter at least one max to see attempts.</div>'; return; }
 
   const plans = [
     {label:'Opener',  pct:90,  color:'#5EC08A', hint:'Safe — should be automatic'},
@@ -2447,7 +2455,7 @@ function renderAttemptTable() {
     {label:'Third',   pct:103, color:'#E85252', hint:'PR attempt'},
   ];
 
-  function attRow(max, pct) {
+  function attCell(max, pct) {
     const w = roundAttempt(max * pct / 100);
     return w ? `<strong style="color:var(--white);font-size:16px;">${w}</strong> <span style="color:var(--muted);font-size:11px;">${state.weightUnit}</span>` : '<span style="color:var(--muted);">—</span>';
   }
@@ -2463,8 +2471,9 @@ function renderAttemptTable() {
           </div>
         </div>
       </td>
-      <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">${attRow(sMax,p.pct)}</td>
-      <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">${attRow(cMax,p.pct)}</td>
+      <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">${attCell(sMax,p.pct)}</td>
+      <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">${attCell(cMax,p.pct)}</td>
+      <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">${attCell(bMax,p.pct)}</td>
       <td style="padding:10px 14px;text-align:center;border-bottom:1px solid var(--dark3);">
         ${(sMax&&cMax)?`<strong style="color:var(--gold);font-size:16px;">${(roundAttempt(sMax*p.pct/100)||0)+(roundAttempt(cMax*p.pct/100)||0)}</strong>`:
           '<span style="color:var(--muted);">—</span>'}
@@ -2475,9 +2484,10 @@ function renderAttemptTable() {
     <thead>
       <tr style="background:var(--dark2);">
         <th style="padding:8px 14px;text-align:left;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--dark3);">ATTEMPT</th>
-        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--dark3);">SNATCH</th>
-        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--dark3);">CLEAN &amp; JERK</th>
-        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--dark3);">TOTAL</th>
+        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:#C9A84C;border-bottom:1px solid var(--dark3);">SNATCH</th>
+        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:#3A86D4;border-bottom:1px solid var(--dark3);">CLEAN &amp; JERK</th>
+        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:#A87FD4;border-bottom:1px solid var(--dark3);">BENCH</th>
+        <th style="padding:8px 14px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;color:var(--gold);border-bottom:1px solid var(--dark3);">OLY TOTAL</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -2535,15 +2545,18 @@ function buildMeetDetailHTML(meet) {
     const ath = athletes.find(a=>(a.id||a.name)===entry.athleteId) || {name: entry.athleteId};
     const sn = entry.snatchAttempts || [null,null,null];
     const cj = entry.cjAttempts    || [null,null,null];
+    const bn = entry.benchAttempts  || [null,null,null];
     const sm = entry.snatchMade    || [null,null,null];
     const cm = entry.cjMade        || [null,null,null];
+    const bm = entry.benchMade     || [null,null,null];
     const bestSnatch = sn.reduce((best,w,i)=>sm[i]===true&&w>best?w:best, 0);
     const bestCJ     = cj.reduce((best,w,i)=>cm[i]===true&&w>best?w:best, 0);
+    const bestBench  = bn.reduce((best,w,i)=>bm[i]===true&&w>best?w:best, 0);
     const total      = bestSnatch&&bestCJ ? bestSnatch+bestCJ : 0;
 
     function attCell(lift, idx) {
-      const arr = lift==='s'?sn:cj;
-      const made= lift==='s'?sm:cm;
+      const arr  = lift==='s'?sn:lift==='c'?cj:bn;
+      const made = lift==='s'?sm:lift==='c'?cm:bm;
       const w = arr[idx]||'';
       const m = made[idx];
       const bg = m===true?'rgba(94,192,138,0.15)':m===false?'rgba(232,82,82,0.1)':'transparent';
@@ -2570,8 +2583,12 @@ function buildMeetDetailHTML(meet) {
       </td>
       ${attCell('s',0)}${attCell('s',1)}${attCell('s',2)}
       ${attCell('c',0)}${attCell('c',1)}${attCell('c',2)}
-      <td style="padding:8px 10px;text-align:center;">
+      ${attCell('b',0)}${attCell('b',1)}${attCell('b',2)}
+      <td style="padding:8px 10px;text-align:center;border-right:1px solid var(--dark3);">
         ${total?`<div style="font-weight:700;color:var(--gold);font-size:15px;">${total}</div><div style="font-size:10px;color:var(--muted);">${bestSnatch}+${bestCJ}</div>`:'<span style="color:var(--muted);">—</span>'}
+      </td>
+      <td style="padding:8px 10px;text-align:center;">
+        ${bestBench?`<div style="font-weight:700;color:#A87FD4;font-size:15px;">${bestBench}</div>`:'<span style="color:var(--muted);">—</span>'}
       </td>
       <td style="padding:4px 8px;text-align:center;">
         <button onclick="removeMeetEntry('${meet.id}',${ei});renderMain();" style="background:none;border:none;cursor:pointer;color:#E07070;font-size:12px;">✕</button>
@@ -2602,19 +2619,23 @@ function buildMeetDetailHTML(meet) {
       </div>
     </div>
     ${entries.length?`<div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:900px;">
       <thead>
         <tr style="background:var(--dark2);">
           <th style="padding:8px 10px;text-align:left;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">ATHLETE</th>
           <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#C9A84C;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">SNATCH</th>
           <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#3A86D4;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">CLEAN &amp; JERK</th>
-          <th style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:var(--gold);border-bottom:1px solid var(--dark3);">TOTAL</th>
+          <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#A87FD4;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">BENCH</th>
+          <th style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:var(--gold);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">OLY TOTAL</th>
+          <th style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#A87FD4;border-bottom:1px solid var(--dark3);">BENCH BEST</th>
           <th style="border-bottom:1px solid var(--dark3);"></th>
         </tr>
         <tr style="background:var(--dark2);">
           <th style="border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);"></th>
           ${['1st','2nd','3rd'].map(l=>`<th style="padding:5px 4px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">${l}</th>`).join('')}
           ${['1st','2nd','3rd'].map(l=>`<th style="padding:5px 4px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">${l}</th>`).join('')}
+          ${['1st','2nd','3rd'].map(l=>`<th style="padding:5px 4px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">${l}</th>`).join('')}
+          <th style="border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);"></th>
           <th style="border-bottom:1px solid var(--dark3);"></th>
           <th style="border-bottom:1px solid var(--dark3);"></th>
         </tr>
@@ -2684,7 +2705,7 @@ function addMeetEntry(meetId) {
   const sel = document.getElementById('add-entry-sel'); if(!sel||!sel.value) return;
   const meet = (state.meets||[]).find(m=>m.id===meetId); if(!meet) return;
   if (!meet.entries) meet.entries=[];
-  meet.entries.push({athleteId:sel.value, snatchAttempts:[null,null,null], cjAttempts:[null,null,null], snatchMade:[null,null,null], cjMade:[null,null,null]});
+  meet.entries.push({athleteId:sel.value, snatchAttempts:[null,null,null], cjAttempts:[null,null,null], benchAttempts:[null,null,null], snatchMade:[null,null,null], cjMade:[null,null,null], benchMade:[null,null,null]});
   saveState(); renderMain();
 }
 
@@ -2700,9 +2721,14 @@ function updateMeetAttempt(meetId, entryIdx, lift, attIdx, field, value) {
   if (lift==='s') {
     if (field==='weight') entry.snatchAttempts[attIdx]=parseFloat(value)||null;
     else entry.snatchMade[attIdx]=value;
-  } else {
+  } else if (lift==='c') {
     if (field==='weight') entry.cjAttempts[attIdx]=parseFloat(value)||null;
     else entry.cjMade[attIdx]=value;
+  } else {
+    if (!entry.benchAttempts) entry.benchAttempts=[null,null,null];
+    if (!entry.benchMade)     entry.benchMade=[null,null,null];
+    if (field==='weight') entry.benchAttempts[attIdx]=parseFloat(value)||null;
+    else entry.benchMade[attIdx]=value;
   }
   saveState();
 }
