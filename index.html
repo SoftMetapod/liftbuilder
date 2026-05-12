@@ -448,6 +448,7 @@ function renderSidebar() {
     <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking','calendar'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
       <span class="pl-name">${p.name}</span>
       <span class="pl-actions">
+        <button class="pl-btn" onclick="event.stopPropagation();shareProgram('${p.id}')" title="Share / Export program as JSON">⬆</button>
         <button class="pl-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
         ${progs.length>1?`<button class="pl-btn" onclick="event.stopPropagation();deleteProgram('${p.id}')" title="Delete" style="color:#E07070;">✕</button>`:''}
       </span>
@@ -461,6 +462,7 @@ function renderSidebar() {
     <div id="prog-section-body" style="display:${_progSectionOpen?'block':'none'};">
       ${progItems}
       <button onclick="openNewProgram()" style="display:flex;align-items:center;gap:6px;padding:7px 1.25rem 7px 1.5rem;background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;width:100%;text-align:left;" onmouseenter="this.style.color='var(--gold)'" onmouseleave="this.style.color='var(--muted)'">+ New program</button>
+      <button onclick="importSharedProgram()" style="display:flex;align-items:center;gap:6px;padding:7px 1.25rem 7px 1.5rem;background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;width:100%;text-align:left;" onmouseenter="this.style.color='var(--gold)'" onmouseleave="this.style.color='var(--muted)'">↓ Import shared program</button>
     </div>
     <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
     <div class="sidebar-section-label" style="padding-top:.5rem;">Tools</div>
@@ -3896,6 +3898,68 @@ function loadState() {
     console.warn('LiftBuilder: could not load saved state', e);
   }
   return false;
+}
+
+// ── Program Share (single-program JSON) ────────────
+function shareProgram(progId) {
+  const p = state.programs[progId];
+  if (!p) return;
+  const payload = {
+    _liftbuilder: true,
+    _type: 'shared_program',
+    version: '2.6.0',
+    exported: new Date().toISOString(),
+    programs: { [progId]: p },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${p.name.replace(/[^a-zA-Z0-9]/g, '_')}_liftbuilder.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSharedProgram() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data._liftbuilder || !data.programs) {
+          alert('Not a valid LiftBuilder program file.'); return;
+        }
+        const incoming = Object.values(data.programs);
+        if (!incoming.length) { alert('No programs found in this file.'); return; }
+        let lastId = null;
+        incoming.forEach(p => {
+          // avoid ID collisions — reassign if the ID already exists
+          let id = p.id || ('prog_' + Date.now());
+          if (state.programs[id]) id = 'prog_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+          p.id = id;
+          state.programs[id] = p;
+          lastId = id;
+        });
+        state.activeProgId = lastId;
+        const ws = Object.keys(state.programs[lastId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
+        state.currentWeek = ws[0] || 1;
+        state.activeTab = 'program';
+        saveState();
+        render();
+        const names = incoming.map(p => p.name).join(', ');
+        showToast(`Imported: ${names}`);
+      } catch (err) {
+        alert('Could not read the file. Make sure it is a valid LiftBuilder program export.');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ── JSON Export / Import ───────────────────────────
