@@ -3936,23 +3936,11 @@ function importSharedProgram() {
         }
         const incoming = Object.values(data.programs);
         if (!incoming.length) { alert('No programs found in this file.'); return; }
-        let lastId = null;
-        incoming.forEach(p => {
-          // avoid ID collisions — reassign if the ID already exists
-          let id = p.id || ('prog_' + Date.now());
-          if (state.programs[id]) id = 'prog_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-          p.id = id;
-          state.programs[id] = p;
-          lastId = id;
-        });
-        state.activeProgId = lastId;
-        const ws = Object.keys(state.programs[lastId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
-        state.currentWeek = ws[0] || 1;
-        state.activeTab = 'program';
-        saveState();
-        render();
-        const names = incoming.map(p => p.name).join(', ');
-        showToast(`Imported: ${names}`);
+        if (incoming.length === 1) {
+          _doImportPrograms(incoming);
+        } else {
+          _showProgramSelectModal(incoming);
+        }
       } catch (err) {
         alert('Could not read the file. Make sure it is a valid LiftBuilder program export.');
       }
@@ -3960,6 +3948,53 @@ function importSharedProgram() {
     reader.readAsText(file);
   };
   input.click();
+}
+
+function _showProgramSelectModal(programs) {
+  const rows = programs.map((p, i) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;cursor:pointer;background:var(--dark2);margin-bottom:6px;">
+      <input type="checkbox" value="${i}" checked style="accent-color:var(--gold);width:15px;height:15px;flex-shrink:0;">
+      <span style="flex:1;">
+        <span style="font-weight:600;color:var(--white);font-size:13px;">${p.name}</span>
+        ${p.org ? `<span style="color:var(--muted);font-size:11px;margin-left:6px;">${p.org}</span>` : ''}
+        <span style="display:block;color:var(--muted);font-size:11px;">${Object.keys(p.weeks||{}).length} weeks · ${(p.trainingDays||[]).join(', ')}</span>
+      </span>
+    </label>`).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Select Programs to Import</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">This file contains ${programs.length} programs. Choose which ones to add to your app.</p>
+    <div id="prog-select-list">${rows}</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="_confirmImportSelected(${JSON.stringify(programs).replace(/"/g,'&quot;')})">Import selected</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+}
+
+function _confirmImportSelected(programs) {
+  const checked = [...document.querySelectorAll('#prog-select-list input[type=checkbox]:checked')].map(cb => parseInt(cb.value));
+  if (!checked.length) { alert('Select at least one program.'); return; }
+  closeModal();
+  _doImportPrograms(checked.map(i => programs[i]));
+}
+
+function _doImportPrograms(programs) {
+  let lastId = null;
+  programs.forEach(p => {
+    let id = p.id || ('prog_' + Date.now());
+    if (state.programs[id]) id = 'prog_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    p.id = id;
+    state.programs[id] = p;
+    lastId = id;
+  });
+  state.activeProgId = lastId;
+  const ws = Object.keys(state.programs[lastId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
+  state.currentWeek = ws[0] || 1;
+  state.activeTab = 'program';
+  saveState();
+  render();
+  showToast(`Imported: ${programs.map(p => p.name).join(', ')}`);
 }
 
 // ── JSON Export / Import ───────────────────────────
