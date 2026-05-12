@@ -3517,6 +3517,9 @@ function detectRosterColumns(headers) {
     snatch:    find('snatch'),
     cj:        find('clean & jerk','clean and jerk','clean/jerk','clean jerk','c&j','c & j','cj'),
     bench:     find('bench press','bench'),
+    jerk:      find('jerk max','jerk'),
+    fsq:       find('front squat','front sq','fsq'),
+    bsq:       find('back squat','back sq','bsq'),
   };
 }
 
@@ -3528,7 +3531,7 @@ function openImportRosterCSV() {
     <h3>Import Roster from CSV</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">
       Upload a CSV file exported from Excel or Google Sheets. Columns auto-detected from header row.<br>
-      <span style="font-size:11px;">Expected headers: Name, Gender, Weight Class, Team, Snatch, C&J, Bench, Grad Year</span>
+      <span style="font-size:11px;">Expected headers: Name, Gender, Weight Class, Team, Snatch, C&J, Bench, Jerk Max, Front Squat, Back Squat, Grad Year</span>
     </p>
     <div style="border:2px dashed var(--dark3);border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;" onclick="document.getElementById('csv-file-input').click()">
       <div style="font-size:2rem;margin-bottom:.5rem;">📄</div>
@@ -3572,6 +3575,9 @@ function renderCSVPreview(headers,rows,cols) {
     {key:'snatch',label:'Snatch',idx:cols.snatch},
     {key:'cj',label:'C&J',idx:cols.cj},
     {key:'bench',label:'Bench',idx:cols.bench},
+    {key:'jerk',label:'Jerk Max',idx:cols.jerk},
+    {key:'fsq',label:'Front Squat',idx:cols.fsq},
+    {key:'bsq',label:'Back Squat',idx:cols.bsq},
     {key:'gradYear',label:'Grad Year',idx:cols.gradYear},
   ];
   const detected=fieldMap.filter(f=>f.idx!==-1);
@@ -3622,6 +3628,9 @@ function confirmImportRoster() {
       snatch: cols.snatch>=0?(parseInt(r[cols.snatch])||0):0,
       cj:     cols.cj>=0?(parseInt(r[cols.cj])||0):0,
       bench:  cols.bench>=0?(parseInt(r[cols.bench])||0):0,
+      jerk:   cols.jerk>=0?(parseInt(r[cols.jerk])||0):0,
+      fsq:    cols.fsq>=0?(parseInt(r[cols.fsq])||0):0,
+      bsq:    cols.bsq>=0?(parseInt(r[cols.bsq])||0):0,
     };
     if(!state.roster.athletes) state.roster.athletes=[];
     const existing = state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase());
