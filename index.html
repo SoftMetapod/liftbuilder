@@ -502,7 +502,7 @@ function renderMain() {
   else if (state.activeTab==='library') { area.innerHTML=buildLibraryHTML(); }
   else if (state.activeTab==='calendar') { area.innerHTML=buildCalendarHTML(); }
   else if (state.activeTab==='calculator') { area.innerHTML=buildCalculatorHTML(); }
-  else if (state.activeTab==='attempts') { area.innerHTML=buildAttemptsHTML(); }
+  else if (state.activeTab==='attempts') { area.innerHTML=buildAttemptsHTML(); if(_attAthleteId) loadAthleteIntoAttempts(); }
   else if (state.activeTab==='meets') { area.innerHTML=buildMeetsHTML(); }
   renderProgToolbar();
   renderHeader();
@@ -2318,7 +2318,7 @@ function buildCalculatorHTML() {
       <div style="display:flex;align-items:center;gap:8px;">
         <select id="calc-athlete" onchange="loadAthleteIntoCalc()" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
           <option value="">— Select athlete —</option>
-          ${athletes.map(a=>`<option value="${a.id||a.name}">${a.name}${a.wc?' ('+a.wc+'kg)':''}</option>`).join('')}
+          ${athletes.map(a=>`<option value="${a.id||a.name}">${a.name}${a.wc?' ('+a.wc+' lbs)':''}</option>`).join('')}
         </select>
         <div style="display:flex;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;overflow:hidden;">
           <button onclick="state.weightUnit='lbs';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
@@ -2397,13 +2397,13 @@ function buildAttemptsHTML() {
         <p style="font-size:12px;color:var(--muted);margin:3px 0 0;">Plan meet attempts based on training maxes. Opener ~90%, second ~98%, third ~103%.</p>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <select id="att-athlete" onchange="loadAthleteIntoAttempts()" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
+        <select id="att-athlete" onchange="_attAthleteId=this.value;loadAthleteIntoAttempts()" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
           <option value="">— Select athlete —</option>
-          ${athletes.map(a=>`<option value="${a.id||a.name}">${a.name}${a.wc?' ('+a.wc+'kg)':''}</option>`).join('')}
+          ${athletes.map(a=>`<option value="${a.id||a.name}" ${_attAthleteId===(a.id||a.name)?'selected':''}>${a.name}${a.wc?' ('+a.wc+' lbs)':''}</option>`).join('')}
         </select>
         <div style="display:flex;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;overflow:hidden;">
-          <button onclick="state.weightUnit='lbs';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
-          <button onclick="state.weightUnit='kg';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='kg'?'var(--dark3)':'transparent'};color:${unit==='kg'?'var(--white)':'var(--muted)'};">KG</button>
+          <button onclick="_attAthleteId=(document.getElementById('att-athlete')||{}).value||'';state.weightUnit='lbs';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
+          <button onclick="_attAthleteId=(document.getElementById('att-athlete')||{}).value||'';state.weightUnit='kg';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='kg'?'var(--dark3)':'transparent'};color:${unit==='kg'?'var(--white)':'var(--muted)'};">KG</button>
         </div>
       </div>
     </div>
@@ -2505,6 +2505,7 @@ function renderAttemptTable() {
 function newMeetId() { return 'meet_'+Date.now(); }
 
 let _activeMeetId = null;
+let _attAthleteId = '';
 
 function buildMeetsHTML() {
   if (_activeMeetId) {
@@ -2585,7 +2586,7 @@ function buildMeetDetailHTML(meet) {
     return `<tr style="border-bottom:1px solid var(--dark3);">
       <td style="padding:8px 10px;border-right:1px solid var(--dark3);">
         <div style="font-weight:600;color:var(--white);font-size:13px;">${ath.name}</div>
-        ${ath.wc?`<div style="font-size:11px;color:var(--muted);">${ath.wc}kg</div>`:''}
+        ${ath.wc?`<div style="font-size:11px;color:var(--muted);">${ath.wc} lbs</div>`:''}
       </td>
       ${attCell('s',0)}${attCell('s',1)}${attCell('s',2)}
       ${attCell('c',0)}${attCell('c',1)}${attCell('c',2)}
@@ -2740,6 +2741,20 @@ function updateMeetAttempt(meetId, entryIdx, lift, attIdx, field, value) {
     if (!entry.benchMade)     entry.benchMade=[null,null,null];
     if (field==='weight') entry.benchAttempts[attIdx]=parseFloat(value)||null;
     else entry.benchMade[attIdx]=value;
+  }
+  // If a made attempt is a new PR, update the athlete's roster max
+  if (field==='made' && value===true) {
+    const liftMap = {s:['snatchAttempts','snatch'], c:['cjAttempts','cj'], b:['benchAttempts','bench']};
+    const [attKey, rosterKey] = liftMap[lift]||[];
+    if (attKey) {
+      const w = entry[attKey]?.[attIdx];
+      if (w) {
+        const ath = (state.roster.athletes||[]).find(a=>(a.id||a.name)===entry.athleteId);
+        if (ath && w > (ath[rosterKey]||0)) {
+          ath[rosterKey] = w;
+        }
+      }
+    }
   }
   saveState();
 }
@@ -2921,6 +2936,10 @@ function buildRosterHTML() {
     if(sf==='traditionalTotal'){
       return (athleteTraditionalTotal(b)-athleteTraditionalTotal(a))*_rosterSort.dir;
     }
+    if(sf==='wc'){
+      const toNum=v=>v==='UNL'?Infinity:(parseInt(v)||0);
+      return (toNum(a.wc)-toNum(b.wc))*_rosterSort.dir;
+    }
     const av=a[sf]||0, bv=b[sf]||0;
     if(typeof av==='number') return (bv-av)*_rosterSort.dir;
     return String(av).localeCompare(String(bv))*_rosterSort.dir;
@@ -2963,6 +2982,7 @@ function buildRosterHTML() {
       <div style="flex:1;"></div>
       <button onclick="openManageRosterFields()" class="btn btn-outline" style="font-size:13px;">⚙ Manage fields</button>
       <button onclick="openImportRosterCSV()" class="btn btn-outline" style="font-size:13px;">⬆ Import CSV</button>
+      ${athletes.length?`<button onclick="clearRoster()" class="btn btn-outline" style="font-size:13px;color:#E07070;border-color:#E07070;">🗑 Clear roster</button>`:''}
       <button onclick="openAddAthlete()" class="btn btn-gold" style="font-size:13px;">+ Add athlete</button>
       <span style="font-size:13px;color:var(--muted);margin-left:4px;">${athletes.length} athlete${athletes.length!==1?'s':''}</span>
     </div>
@@ -2986,8 +3006,8 @@ function buildRosterHTML() {
         <thead><tr>
           ${sortBtn('name','Name')}
           <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Gender</th>
-          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">WT Class</th>
-          <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Grad Year</th>
+          ${sortBtn('wc','WT Class (lbs)')}
+          ${sortBtn('gradYear','Grad Year')}
           <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Team</th>
           ${sortBtn('snatch','Snatch')}
           ${sortBtn('cj','C&J')}
@@ -3273,6 +3293,13 @@ function saveAthlete(idx) {
 function deleteAthlete(idx) {
   if(!confirm('Remove this athlete from the roster?')) return;
   state.roster.athletes.splice(idx,1);
+  saveState(); renderMain();
+}
+
+function clearRoster() {
+  const n = (state.roster.athletes||[]).length;
+  if(!confirm(`Delete all ${n} athlete${n!==1?'s':''} from the roster? This cannot be undone.`)) return;
+  state.roster.athletes = [];
   saveState(); renderMain();
 }
 
