@@ -1,30 +1,22 @@
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 
-let mainWindow = null;
+let mainWindow   = null;
+let _autoUpdater = null;
 
-// ── Auto-updater config ────────────────────────────────────────────────────
-// Only used for version detection — unsigned apps can't use Squirrel.Mac install
-autoUpdater.autoDownload = false;
-autoUpdater.verifyUpdateCodeSignature = false;
-
-autoUpdater.on('update-available', (info) => {
-  mainWindow?.webContents.send('update-available', info.version);
-});
-
-autoUpdater.on('update-not-available', () => {
-  mainWindow?.webContents.send('update-not-available');
-});
-
-autoUpdater.on('error', () => {
-  // Silently ignore — version check errors are non-critical
-});
-
-// ── IPC handlers (called from renderer via preload) ────────────────────────
-ipcMain.handle('check-for-updates',  () => autoUpdater.checkForUpdates());
-ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
-ipcMain.handle('get-version',        () => app.getVersion());
+// ── Auto-updater — lazy-loaded after app is ready ──────────────────────────
+function getUpdater() {
+  if (!_autoUpdater) {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = false;
+    autoUpdater.verifyUpdateCodeSignature = false;
+    autoUpdater.on('update-available',     (info) => mainWindow?.webContents.send('update-available', info.version));
+    autoUpdater.on('update-not-available', ()     => mainWindow?.webContents.send('update-not-available'));
+    autoUpdater.on('error',                ()     => {});
+    _autoUpdater = autoUpdater;
+  }
+  return _autoUpdater;
+}
 
 // ── Window ─────────────────────────────────────────────────────────────────
 function createWindow() {
@@ -53,10 +45,25 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // ── IPC handlers ────────────────────────────────────────────────────────
+  ipcMain.handle('check-for-updates',  () => getUpdater().checkForUpdates());
+  ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
+  ipcMain.handle('get-version',        () => app.getVersion());
+  ipcMain.handle('open-display-window', () => {
+    const display = new BrowserWindow({
+      width: 1280, height: 720,
+      title: 'LiftBuilder — Live Display',
+      backgroundColor: '#0E0E0E',
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+    display.loadFile('host-meet-display.html');
+    display.on('closed', () => {});
+  });
+
   createWindow();
 
   // Check for updates silently 5 seconds after launch
-  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+  setTimeout(() => getUpdater().checkForUpdates().catch(() => {}), 5000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

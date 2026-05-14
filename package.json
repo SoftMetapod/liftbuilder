@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "4.0.0",
+  "version": "4.5.0",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
@@ -21,6 +21,7 @@
     "files": [
       "index.html",
       "host-meet.js",
+      "host-meet-display.html",
       "main.js",
       "preload.js",
       "vendor/**"
