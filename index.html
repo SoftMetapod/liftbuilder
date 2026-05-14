@@ -594,6 +594,8 @@ function renderSidebar() {
     <div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>
     <div class="nav-item ${state.activeTab==='library'?'active':''}" onclick="switchTab('library')"><span>📚</span> Exercise Library</div>
     <div class="nav-item ${state.activeTab==='calendar'?'active':''}" onclick="switchTab('calendar')"><span>📅</span> Calendar</div>
+    <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
+    <div class="nav-item ${state.activeTab==='hostmeet'?'active':''}" onclick="switchTab('hostmeet')"><span>🏆</span> Host Meet</div>
     <div style="flex:1;"></div>
     <div style="padding:.75rem 1.25rem;border-top:1px solid var(--dark3);display:flex;flex-direction:column;gap:5px;">
       <div style="display:flex;gap:5px;">
@@ -627,6 +629,7 @@ function renderMain() {
   else if (state.activeTab==='calculator') { area.innerHTML=buildCalculatorHTML(); }
   else if (state.activeTab==='attempts') { area.innerHTML=buildAttemptsHTML(); if(_attAthleteId) loadAthleteIntoAttempts(); }
   else if (state.activeTab==='meets') { area.innerHTML=buildMeetsHTML(); }
+  else if (state.activeTab==='hostmeet') { area.innerHTML=HM.buildHTML(); }
   renderProgToolbar();
   renderHeader();
 }
@@ -2614,7 +2617,7 @@ function closeModal(){document.getElementById('overlay').style.display='none';}
 //  ROSTER  (shared across all programs)
 // ═══════════════════════════════════════════════════
 const GIRLS_WC = ['101','110','119','129','139','154','169','183','199','UNL'];
-const BOYS_WC  = ['106','114','123','132','143','154','165','176','197','220','238','UNL'];
+const BOYS_WC  = ['119','129','139','154','169','183','199','219','238','HWT'];
 const CORE_FIELDS = ['snatch','cj','bench']; // used in total calc — cannot be deleted
 
 // Roster lives at top level of state (not per-program)
@@ -4859,5 +4862,6 @@ initApp();
   });
 })();
 </script>
+<script src="host-meet.js"></script>
 </body>
 </html>
