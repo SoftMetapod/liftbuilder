@@ -58,6 +58,13 @@
   #now-weight span { font-size: 28px; color: #666; }
   #now-attempt { font-size: 16px; color: #888; margin-top: 4px; }
   #now-dots { font-size: 22px; margin-top: 8px; }
+  #now-result { display: none; margin-top: 18px; }
+  .result-badge {
+    display: inline-block; border-radius: 8px; padding: 14px 28px;
+    font-size: 34px; font-weight: 900; letter-spacing: 2px;
+  }
+  .result-badge.good { background: rgba(30,100,50,.35); border: 2px solid #5EC08A; color: #5EC08A; }
+  .result-badge.miss { background: rgba(100,20,20,.35); border: 2px solid #E07070; color: #E07070; }
 
   /* RESULT flash */
   #result-flash {
@@ -129,6 +136,7 @@
       <div id="now-weight">— <span>lbs</span></div>
       <div id="now-attempt"></div>
       <div id="now-dots"></div>
+      <div id="now-result"></div>
     </div>
     <div id="waiting-msg" style="display:none;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:32px;text-align:center;">
       <div id="waiting-text" style="font-size:22px;color:#555;">Waiting for athletes to check in…</div>
@@ -159,7 +167,8 @@ const GIRLS_WC = ['101','110','119','129','139','154','169','183','199','UNL'];
 const BOYS_WC  = ['119','129','139','154','169','183','199','219','238','HWT'];
 const STATUS_LABEL = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench', complete:'Complete' };
 
-let _flashTimeout = null;
+let _flashTimeout    = null;
+let _prevLastLiftKey = null;
 
 function _wcs(g) { return g === 'Girls' ? GIRLS_WC : BOYS_WC; }
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s||''); return d.innerHTML; }
@@ -267,16 +276,47 @@ function render(m, ds) {
     document.getElementById('phase-done-text').textContent = (STATUS_LABEL[lift]||lift) + ' phase complete';
     queueDiv.innerHTML = '';
   } else if (!current) {
-    nowDiv.style.display     = 'none';
     phaseDone.style.display  = 'none';
-    waitingDiv.style.display = '';
-    document.getElementById('waiting-text').textContent =
-      barWeight ? 'Bar loaded at ' + barWeight + ' lbs — waiting for check-in…' : 'Waiting for athletes to check in…';
-    queueDiv.innerHTML = '';
+    queueDiv.innerHTML       = '';
+    const lastLift = ds.lastLift;
+    if (lastLift) {
+      // Show previous lifter's result while waiting for next check-in
+      nowDiv.style.display        = '';
+      nowDiv.style.borderColor    = '#444';
+      waitingDiv.style.display    = '';
+      document.getElementById('waiting-text').textContent =
+        barWeight ? 'Bar loaded at ' + barWeight + ' lbs — waiting for check-in…' : 'Waiting for next athlete to check in…';
+      const prevEntry = (m.entries||[]).find(e => e.id === lastLift.entryId);
+      const prevSchool = (m.schools||[]).find(s => s.id === lastLift.schoolId);
+      const ordinal = ['1st','2nd','3rd'][lastLift.attemptIdx] || (lastLift.attemptIdx+1)+'th';
+      const nowLabel = document.getElementById('now-label');
+      nowLabel.textContent = 'PREVIOUS LIFT';
+      nowLabel.style.color = '#666';
+      document.getElementById('now-name').textContent    = lastLift.name;
+      document.getElementById('now-meta').textContent    = (prevSchool?.name||'') + ' · ' + lastLift.wc + ' lbs · ' + ordinal + ' attempt';
+      document.getElementById('now-weight').innerHTML    = lastLift.declared + ' <span>lbs</span>';
+      document.getElementById('now-attempt').textContent = STATUS_LABEL[lastLift.lift] || lastLift.lift;
+      document.getElementById('now-dots').innerHTML      = prevEntry ? _dots(prevEntry[lastLift.lift], -1) : '';
+      const resultEl = document.getElementById('now-result');
+      resultEl.style.display = '';
+      resultEl.innerHTML = lastLift.result === 'good'
+        ? '<div class="result-badge good">✓ GOOD LIFT</div>'
+        : '<div class="result-badge miss">✗ NO LIFT</div>';
+    } else {
+      nowDiv.style.display     = 'none';
+      waitingDiv.style.display = '';
+      document.getElementById('waiting-text').textContent =
+        barWeight ? 'Bar loaded at ' + barWeight + ' lbs — waiting for check-in…' : 'Waiting for athletes to check in…';
+    }
   } else {
-    nowDiv.style.display     = '';
-    waitingDiv.style.display = 'none';
-    phaseDone.style.display  = 'none';
+    nowDiv.style.display        = '';
+    nowDiv.style.borderColor    = '#C9A84C';
+    waitingDiv.style.display    = 'none';
+    phaseDone.style.display     = 'none';
+    const nowLabel = document.getElementById('now-label');
+    nowLabel.textContent = 'NOW LIFTING';
+    nowLabel.style.color = '#C9A84C';
+    document.getElementById('now-result').style.display = 'none';
     const idx     = _curIdx(current, lift);
     const att     = current[lift][idx];
     const school  = (m.schools||[]).find(s => s.id === current.schoolId);
@@ -319,9 +359,11 @@ function render(m, ds) {
       let p = 0;
       const rows = grp.map(r => {
         if (r.tot > 0) p++;
+        const medal = p===1?'🥇':p===2?'🥈':p===3?'🥉':null;
+        const placeDisplay = r.tot > 0 ? (medal || p) : '—';
         const sch = (m.schools||[]).find(s => s.id===r.e.schoolId);
         return `<div class="score-row${r.tot>0&&p===1?' first':''}">
-          <div class="score-place${r.tot>0&&p===1?' gold':''}">${r.tot>0?p:'—'}</div>
+          <div class="score-place${r.tot>0&&p<=3?' gold':''}" style="font-size:${medal?'20px':'18px'}">${placeDisplay}</div>
           <div><div class="score-name">${esc(r.e.name)}</div><div class="score-school">${esc(sch?.name||'')}</div></div>
           <div class="score-total${!r.tot?' bomb':''}">${r.tot||'0'}</div>
         </div>`;
@@ -377,6 +419,11 @@ function poll() {
       return;
     }
     const ds = stateRaw ? JSON.parse(stateRaw) : {};
+    // Flash when a new result is recorded
+    const ll = ds.lastLift;
+    const llKey = ll ? `${ll.entryId}:${ll.attemptIdx}:${ll.result}` : null;
+    if (llKey && llKey !== _prevLastLiftKey) flashResult(ll.result);
+    _prevLastLiftKey = llKey;
     render(m, ds);
   } catch(e) {
     console.error('Display poll error:', e);

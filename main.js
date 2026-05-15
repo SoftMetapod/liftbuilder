@@ -49,6 +49,27 @@ app.whenReady().then(() => {
   ipcMain.handle('check-for-updates',  () => getUpdater().checkForUpdates());
   ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
   ipcMain.handle('get-version',        () => app.getVersion());
+  ipcMain.handle('export-pdf', async (_event, html) => {
+    const { dialog } = require('electron');
+    const fs   = require('fs');
+    const os   = require('os');
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      title: 'Save Results PDF',
+      defaultPath: 'LiftBuilder_Results.pdf',
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    const tmp = path.join(os.tmpdir(), '_lb_pdf_tmp.html');
+    fs.writeFileSync(tmp, html, 'utf8');
+    const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+    await win.loadFile(tmp);
+    const pdfBuf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'Letter' });
+    win.destroy();
+    fs.unlinkSync(tmp);
+    fs.writeFileSync(filePath, pdfBuf);
+    return { success: true };
+  });
+
   ipcMain.handle('open-display-window', () => {
     const display = new BrowserWindow({
       width: 1280, height: 720,

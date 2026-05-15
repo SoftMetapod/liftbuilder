@@ -32,6 +32,8 @@ const HM = (() => {
   let _timerEndMs         = null;
   let _timerPausedRem     = null;
   let _timerInterval      = null;
+  let _compFontLarge      = false;
+  let _lastLift           = null;  // last recorded result, shown on display while waiting
 
   // ── Persistence ────────────────────────────────────────────────────────────
   const STORE_KEY         = 'liftbuilder_hosted_meets';
@@ -48,6 +50,7 @@ const HM = (() => {
         activeFlight: _activeFlight,
         barWeight:    _barWeight,
         attemptRound: _attemptRound,
+        lastLift:     _lastLift,
       }));
     } catch(e) {}
   }
@@ -307,6 +310,7 @@ const HM = (() => {
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             ${hasHome ? `<button onclick="HM.openImportRosterModal()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;">⬆ Import from Roster</button>` : ''}
+            <button onclick="HM.openImportCSVModal()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;" ${m.schools.length?'':'disabled'}>⬆ Import CSV</button>
             <button onclick="HM.openAddEntryModal()" class="btn btn-gold" style="font-size:12px;padding:5px 12px;" ${m.schools.length?'':'disabled'}>+ Add Athlete</button>
           </div>
         </div>
@@ -445,9 +449,17 @@ const HM = (() => {
 
     // Split into checked-in (active queue) and waiting (must check in first)
     const checkedIn = flight.filter(e => _checkedIn.has(e.id + ':' + _curIdx(e, lift)));
-    const waiting   = flight.filter(e => !_checkedIn.has(e.id + ':' + _curIdx(e, lift)));
+    // Waiting: sorted so lifters who can check in right now (right round, not blocked) float to top
+    const waiting = flight
+      .filter(e => !_checkedIn.has(e.id + ':' + _curIdx(e, lift)))
+      .sort((a, b) => {
+        const canA = (_barWeight && _curIdx(a, lift) === _attemptRound - 1 && !_checkInBlocked(a, lift)) ? 0 : 1;
+        const canB = (_barWeight && _curIdx(b, lift) === _attemptRound - 1 && !_checkInBlocked(b, lift)) ? 0 : 1;
+        return canA - canB;
+      });
     const current   = checkedIn[0] || null;
     const onDeck    = checkedIn.slice(1);
+    const fL        = _compFontLarge; // font-large shorthand
 
     // Next bar weight suggestion — always +5 lbs
     const nextBarWeight = _barWeight ? _barWeight + 5 : null;
@@ -536,15 +548,15 @@ const HM = (() => {
         const school = m.schools.find(s => s.id === e.schoolId);
         const ord  = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:8px 10px;font-size:12px;color:var(--muted);text-align:center;">${qi+2}</td>
-          <td style="padding:8px 10px;">
-            <div style="font-weight:600;font-size:14px;">${esc(e.name)}</div>
-            <div style="font-size:11px;color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</div>
+          <td style="padding:${fL?'11px':'8px'} 10px;font-size:12px;color:var(--muted);text-align:center;">${qi+2}</td>
+          <td style="padding:${fL?'11px':'8px'} 10px;">
+            <div style="font-weight:600;font-size:${fL?'18px':'14px'};">${esc(e.name)}</div>
+            <div style="font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</div>
           </td>
-          <td style="padding:8px 10px;">${_dots(e[lift], idx)}</td>
-          <td style="padding:8px 10px;text-align:right;white-space:nowrap;">
-            <span style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;">${att.declared || '—'}</span>
-            <span style="font-size:11px;color:var(--muted);">lbs</span>
+          <td style="padding:${fL?'11px':'8px'} 10px;">${_dots(e[lift], idx)}</td>
+          <td style="padding:${fL?'11px':'8px'} 10px;text-align:right;white-space:nowrap;">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:${fL?'20px':'16px'};font-weight:700;">${att.declared || '—'}</span>
+            <span style="font-size:${fL?'14px':'11px'};color:var(--muted);">lbs</span>
           </td>
           <td style="padding:8px 6px;text-align:center;white-space:nowrap;">
             <button onclick="HM.passAttempt('${e.id}','${lift}')"
@@ -575,17 +587,29 @@ const HM = (() => {
     // WAITING section (athletes at higher declared weights)
     let waitingHTML = '';
     if (waiting.length) {
+      // Track where the first "not yet ready to check in" lifter starts
+      let passedDivider = false;
       const wRows = waiting.map(e => {
         const idx  = _curIdx(e, lift);
         const att  = e[lift][idx];
         const school = m.schools.find(s => s.id === e.schoolId);
         const ord  = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
-        return `<tr style="border-bottom:1px solid var(--dark3);opacity:0.55;">
-          <td style="padding:7px 10px;font-size:13px;font-weight:500;">${esc(e.name)}</td>
-          <td style="padding:7px 10px;font-size:11px;color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</td>
-          <td style="padding:7px 10px;">${_dots(e[lift], idx)}</td>
-          <td style="padding:7px 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;">
-            ${att.declared || '—'} <span style="font-size:11px;color:var(--muted);font-weight:400;">lbs</span>
+        const canCheckIn = _barWeight && idx === _attemptRound - 1 && !_checkInBlocked(e, lift);
+        let divider = '';
+        if (!canCheckIn && !passedDivider && waiting.some(x => {
+          const xi = _curIdx(x, lift);
+          return _barWeight && xi === _attemptRound - 1 && !_checkInBlocked(x, lift);
+        })) {
+          passedDivider = true;
+          divider = `<tr><td colspan="5" style="padding:0;border-top:1px dashed var(--dark3);"></td></tr>`;
+        }
+        const opacity = canCheckIn ? '1' : '0.55';
+        return divider + `<tr style="border-bottom:1px solid var(--dark3);opacity:${opacity};">
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'13px'};font-weight:${canCheckIn?'600':'500'};">${esc(e.name)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], idx)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:${fL?'18px':'14px'};font-weight:700;">
+            ${att.declared || '—'} <span style="font-size:${fL?'13px':'11px'};color:var(--muted);font-weight:400;">lbs</span>
           </td>
           <td style="padding:7px 6px;text-align:center;white-space:nowrap;">${(() => {
             const blocked    = _barWeight ? _checkInBlocked(e, lift) : null;
@@ -625,10 +649,10 @@ const HM = (() => {
         const best   = _bestMade(e[lift]);
         const school = m.schools.find(s => s.id === e.schoolId);
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:7px 10px;font-size:14px;font-weight:500;">${esc(e.name)}</td>
-          <td style="padding:7px 10px;font-size:12px;color:var(--muted);">${esc(school?.name||'')} · ${e.wc}</td>
-          <td style="padding:7px 10px;">${_dots(e[lift], -1)}</td>
-          <td style="padding:7px 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:${best?'var(--gold)':'#E07070'};">${best ? best+' lbs' : 'Bomb'}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'14px'};font-weight:500;">${esc(e.name)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'12px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], -1)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:${fL?'18px':'15px'};color:${best?'var(--gold)':'#E07070'};">${best ? best+' lbs' : 'Bomb'}</td>
         </tr>`;
       }).join('');
       doneHTML = `
@@ -664,6 +688,7 @@ const HM = (() => {
         <div style="flex:1;"></div>
         ${timerHTML}
         <div style="width:1px;background:var(--dark3);height:24px;margin:0 10px;"></div>
+        <button onclick="HM._toggleCompFont()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;" title="Toggle font size">${_compFontLarge ? 'A−' : 'A+'}</button>
         <button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;" title="Open live display window">📺 Display</button>
         <button onclick="HM.advancePhase()" class="btn btn-gold" style="font-size:13px;margin-left:6px;" ${phaseComplete?'':'disabled'}
           title="${phaseComplete?'Move to next phase':'All athletes must finish this lift first'}">
@@ -749,12 +774,13 @@ const HM = (() => {
             let pIdx = -1;
             const rows = group.map(r => {
               if (r.tot > 0) pIdx++;
-              const placeNum  = r.tot > 0 ? pIdx + 1 : null;
-              const earnedPts = placeNum && pIdx < pts.length ? pts[pIdx] : null;
-              const isFirst   = placeNum === 1;
+              const placeNum    = r.tot > 0 ? pIdx + 1 : null;
+              const earnedPts   = placeNum && pIdx < pts.length ? pts[pIdx] : null;
+              const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
+              const placeDisplay = medal || placeNum || '—';
               const sch = m.schools.find(s => s.id === r.e.schoolId);
               return `<tr style="border-bottom:1px solid var(--dark3);">
-                <td style="padding:5px 7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${isFirst?'var(--gold)':'var(--muted)'};">${placeNum||'—'}</td>
+                <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
                 <td style="padding:5px 7px;font-size:13px;">${esc(r.e.name)}</td>
                 <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.sn||'—'}</td>
@@ -779,12 +805,13 @@ const HM = (() => {
             let pIdx = -1;
             const rows = group.map(r => {
               if (r.tot > 0) pIdx++;
-              const placeNum  = r.tot > 0 ? pIdx + 1 : null;
-              const earnedPts = placeNum && pIdx < pts.length ? pts[pIdx] : null;
-              const isFirst   = placeNum === 1;
+              const placeNum    = r.tot > 0 ? pIdx + 1 : null;
+              const earnedPts   = placeNum && pIdx < pts.length ? pts[pIdx] : null;
+              const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
+              const placeDisplay = medal || placeNum || '—';
               const sch = m.schools.find(s => s.id === r.e.schoolId);
               return `<tr style="border-bottom:1px solid var(--dark3);">
-                <td style="padding:5px 7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${isFirst?'var(--gold)':'var(--muted)'};">${placeNum||'—'}</td>
+                <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
                 <td style="padding:5px 7px;font-size:13px;">${esc(r.e.name)}</td>
                 <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.cj||'—'}</td>
@@ -947,6 +974,7 @@ const HM = (() => {
         <button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">📺 Display</button>
         <button onclick="HM.syncPRsToRoster()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">↑ Sync PRs</button>
         <button onclick="HM.exportResultsCSV()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">⬇ CSV</button>
+        <button onclick="HM.exportResultsPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">⬇ PDF</button>
       </div>
       <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;align-items:start;">
         <div>${wcSections}</div>
@@ -1150,6 +1178,73 @@ const HM = (() => {
     if (skipped > 0) showToast(`${added} imported, ${skipped} skipped (weight class full)`);
   }
 
+  function openImportCSVModal() {
+    const m = _meet(); if (!m) return;
+    autoSaveSetup();
+    if (!m.schools.length) { alert('Add schools first.'); return; }
+    const schoolOpts = m.schools.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    document.getElementById('modal-body').innerHTML = `
+      <h3>Import Athletes from CSV</h3>
+      <div class="form-field">
+        <label>School</label>
+        <select id="hm-csv-school">${schoolOpts}</select>
+      </div>
+      <div class="form-field">
+        <label>Paste athlete data — one per line</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">
+          Format: <strong>Name, Weight Class, Discipline</strong><br>
+          Discipline: both · olympic · traditional · exhibition (default: both)<br>
+          Example: Jane Doe, 154, olympic
+        </div>
+        <textarea id="hm-csv-data" rows="10"
+          style="width:100%;background:var(--dark);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:8px;font-size:13px;font-family:monospace;resize:vertical;"
+          placeholder="John Smith, 154, both&#10;Jane Doe, 119, olympic&#10;Bob Jones, 129"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="HM.confirmImportCSV()">Import</button>
+      </div>`;
+    document.getElementById('overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('hm-csv-data')?.focus(), 50);
+  }
+
+  function confirmImportCSV() {
+    const m = _meet(); if (!m) return;
+    const schoolId = document.getElementById('hm-csv-school')?.value; if (!schoolId) return;
+    const raw = (document.getElementById('hm-csv-data')?.value || '').trim();
+    if (!raw) { alert('Paste athlete data first.'); return; }
+    const wcs = _wcs(m.gender);
+
+    function normDisc(s) {
+      const v = (s||'').trim().toLowerCase();
+      if (v==='olympic'||v==='oly'||v==='o') return 'olympic';
+      if (v==='traditional'||v==='trad'||v==='t') return 'traditional';
+      if (v==='exhibition'||v==='exh'||v==='ex'||v==='e') return 'exhibition';
+      return 'both';
+    }
+    function normWC(s) {
+      const v = (s||'').trim().toUpperCase();
+      if (wcs.includes(v)) return v;
+      const n = parseInt(v);
+      if (n) { const match = wcs.find(w => parseInt(w) === n); if (match) return match; }
+      return wcs[0];
+    }
+
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !/^name[,\t]/i.test(l));
+    let added = 0, skipped = 0;
+    lines.forEach(line => {
+      const parts = line.split(',').map(p => p.trim());
+      const name = parts[0]; if (!name) return;
+      const wc   = normWC(parts[1]);
+      const disc = normDisc(parts[2]);
+      if (disc !== 'exhibition' && m.entries.filter(e => e.schoolId === schoolId && e.wc === wc && e.discipline !== 'exhibition').length >= 2) { skipped++; return; }
+      m.entries.push(_blankEntry(name, schoolId, wc, disc, null, null));
+      added++;
+    });
+    _save(); closeModal(); renderMain();
+    showToast(skipped > 0 ? `${added} imported, ${skipped} skipped (weight class full)` : `${added} athlete${added!==1?'s':''} imported`);
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   //  WEIGH-IN ACTIONS
   // ══════════════════════════════════════════════════════════════════════════
@@ -1224,6 +1319,7 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
     const att = e[lift][attemptIdx]; if (!att) return;
+    _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx };
     att.result = result;
     _save();
     const nextIdx = attemptIdx + 1;
@@ -1399,6 +1495,7 @@ const HM = (() => {
     _save();
     _checkedIn.clear();
     _attemptRound = 1;
+    _lastLift     = null;
     if (next === 'complete') {
       _barWeight = null;
       _view = 'results';
@@ -1457,6 +1554,7 @@ const HM = (() => {
   }
 
   function _setScoreTab(tab) { _scoreTab = tab; renderMain(); }
+  function _toggleCompFont() { _compFontLarge = !_compFontLarge; renderMain(); }
 
   // ── Sync PRs to roster ─────────────────────────────────────────────────────
   function syncPRsToRoster() {
@@ -1507,6 +1605,126 @@ const HM = (() => {
     const a    = document.createElement('a');
     a.href = url; a.download = (m.name||'meet').replace(/[^a-z0-9]/gi,'_')+'_results.csv'; a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportResultsPDF() {
+    const m = _meet(); if (!m) return;
+    const wcs  = _wcs(m.gender);
+    const N    = m.schools.length;
+    const pts  = _teamPoints(N);
+    const discMap = { both:'Both', traditional:'Traditional', olympic:'Olympic', exhibition:'Exhibition' };
+
+    // ── Compute team scores ────────────────────────────────────────────────
+    const scores = {};
+    m.schools.forEach(s => { scores[s.id] = { name: s.name, olympic: 0, traditional: 0 }; });
+    const oElig = m.entries.filter(e => e.discipline==='both'||e.discipline==='olympic');
+    wcs.filter(wc => oElig.some(e => e.wc===wc)).forEach(wc => {
+      const grp = oElig.filter(e => e.wc===wc).map(e => ({ e, tot: _olympicTotal(e) })).sort((a,b) => b.tot-a.tot||_bestMade(b.e.snatch)-_bestMade(a.e.snatch));
+      let p=0; grp.forEach(r => { if (r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].olympic += pts[p++]; });
+    });
+    const tElig = m.entries.filter(e => e.discipline==='both'||e.discipline==='traditional');
+    wcs.filter(wc => tElig.some(e => e.wc===wc)).forEach(wc => {
+      const grp = tElig.filter(e => e.wc===wc).map(e => ({ e, tot: _traditionalTotal(e) })).sort((a,b) => b.tot-a.tot||_bestMade(b.e.cj)-_bestMade(a.e.cj));
+      let p=0; grp.forEach(r => { if (r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].traditional += pts[p++]; });
+    });
+    const teamData = Object.values(scores).map(s => ({ ...s, total: s.olympic+s.traditional })).sort((a,b) => b.total-a.total);
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function medal(p) { return p===1?'🥇':p===2?'🥈':p===3?'🥉':p; }
+    function attCell(a) {
+      if (!a || a.result===null) return '<td></td>';
+      const good = a.result==='good';
+      return `<td style="text-align:center;color:${good?'#1a7a1a':'#c00'};font-weight:${good?700:400};${!good?'text-decoration:line-through':''};">${good?'+':''}${a.declared}</td>`;
+    }
+
+    // ── Team score tables ──────────────────────────────────────────────────
+    function teamTableHTML(title, sorted, key) {
+      const rows = sorted.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;font-weight:700;">${s[key]}</td></tr>`).join('');
+      return `<h3>${title}</h3><table><thead><tr><th>#</th><th>School</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    const oTeam = [...teamData].sort((a,b)=>b.olympic-a.olympic);
+    const tTeam = [...teamData].sort((a,b)=>b.traditional-a.traditional);
+    const combinedRows = teamData.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;">${s.olympic} + ${s.traditional}</td><td style="text-align:right;font-weight:700;font-size:12pt;">${s.total}</td></tr>`).join('');
+    const teamHTML = teamTableHTML('Olympic Team Scores', oTeam, 'olympic')
+      + teamTableHTML('Traditional Team Scores', tTeam, 'traditional')
+      + `<h3>Combined Total</h3><table><thead><tr><th>#</th><th>School</th><th style="text-align:right;">Oly + Trad</th><th style="text-align:right;">Total</th></tr></thead><tbody>${combinedRows}</tbody></table>`;
+
+    // ── Individual results ─────────────────────────────────────────────────
+    function indivSectionHTML(label, elig, totFn, tieKey) {
+      if (!elig.length) return '';
+      const wcSecs = wcs.filter(wc => elig.some(e => e.wc===wc)).map(wc => {
+        const grp = elig.filter(e => e.wc===wc)
+          .map(e => ({ e, tot: totFn(e), tiebreak: _bestMade(e[tieKey]) }))
+          .sort((a,b) => b.tot-a.tot||b.tiebreak-a.tiebreak);
+        let pIdx = -1;
+        const rows = grp.map(r => {
+          if (r.tot>0) pIdx++;
+          const placeNum  = r.tot>0 ? pIdx+1 : null;
+          const earnedPts = placeNum && pIdx<pts.length ? pts[pIdx] : null;
+          const sch = m.schools.find(s => s.id===r.e.schoolId);
+          const isSnatch = label==='OLYMPIC';
+          const lift1 = isSnatch ? r.e.snatch : r.e.cj;
+          const lift2 = isSnatch ? r.e.cj     : r.e.bench;
+          const best1 = _bestMade(lift1), best2 = _bestMade(lift2);
+          return `<tr>
+            <td style="text-align:center;font-size:${placeNum&&placeNum<=3?'13pt':'10pt'};">${placeNum?(medal(placeNum)):'—'}</td>
+            <td>${r.e.name}</td>
+            <td style="color:#555;">${sch?.name||''}</td>
+            ${attCell(lift1[0])}${attCell(lift1[1])}${attCell(lift1[2])}
+            <td style="text-align:right;font-weight:700;">${best1||'—'}</td>
+            ${attCell(lift2[0])}${attCell(lift2[1])}${attCell(lift2[2])}
+            <td style="text-align:right;font-weight:700;">${best2||'—'}</td>
+            <td style="text-align:right;font-weight:700;color:#8B6914;">${r.tot||'—'}</td>
+            <td style="text-align:right;color:#1a7a1a;font-weight:600;">${earnedPts!=null?'+'+earnedPts:'—'}</td>
+          </tr>`;
+        }).join('');
+        const h1 = isSnatch ? 'Snatch' : 'C&amp;J';
+        const h2 = isSnatch ? 'C&amp;J' : 'Bench';
+        return `<h3>${wc} lbs</h3>
+          <table><thead><tr>
+            <th>#</th><th>Athlete</th><th>School</th>
+            <th colspan="3" style="text-align:center;">${h1}</th><th style="text-align:right;">Best</th>
+            <th colspan="3" style="text-align:center;">${h2}</th><th style="text-align:right;">Best</th>
+            <th style="text-align:right;">Total</th><th style="text-align:right;">Pts</th>
+          </tr></thead><tbody>${rows}</tbody></table>`;
+      }).join('');
+      return `<h2>${label}</h2>${wcSecs}`;
+    }
+
+    const indivHTML = indivSectionHTML('OLYMPIC', oElig, _olympicTotal, 'snatch')
+      + indivSectionHTML('TRADITIONAL', tElig, _traditionalTotal, 'cj');
+
+    // ── Assemble HTML ──────────────────────────────────────────────────────
+    const css = `
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:10pt;color:#000;padding:24px;}
+      h1{font-size:22pt;margin-bottom:4px;}
+      .meta{font-size:10pt;color:#555;margin-bottom:20px;}
+      h2{font-size:14pt;border-bottom:2px solid #C9A84C;padding-bottom:4px;margin:24px 0 12px;color:#333;}
+      h3{font-size:11pt;background:#f0f0f0;padding:4px 8px;margin:14px 0 6px;border-radius:2px;}
+      table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:9pt;}
+      th{background:#e8e8e8;padding:4px 6px;text-align:left;font-size:8pt;font-weight:700;letter-spacing:.3px;border:1px solid #ccc;}
+      td{padding:4px 6px;border-bottom:1px solid #eee;}
+      @media print{body{padding:12px}h2{page-break-before:auto}}`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${m.name||'Meet'} — Results</title><style>${css}</style></head>
+      <body>
+        <h1>${m.name||'Meet Results'}</h1>
+        <div class="meta">${m.gender} &nbsp;|&nbsp; ${m.date||'—'} &nbsp;|&nbsp; ${m.location||''}</div>
+        <h2>Team Scores</h2>${teamHTML}
+        ${indivHTML}
+      </body></html>`;
+
+    if (window.liftbuilderApp?.exportPDF) {
+      window.liftbuilderApp.exportPDF(html)
+        .then(r => showToast(r?.success ? 'PDF saved.' : 'PDF export cancelled.'))
+        .catch(() => showToast('PDF export failed.'));
+    } else {
+      const win = window.open('', '_blank', 'width=1000,height=750');
+      if (!win) { showToast('Allow pop-ups to export PDF.'); return; }
+      win.document.write(html); win.document.close(); win.focus();
+      setTimeout(() => win.print(), 500);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1690,6 +1908,7 @@ const HM = (() => {
     _barWeight    = null;
     _checkedIn.clear();
     _attemptRound = 1;
+    _lastLift     = null;
     const m = _meet(); if (!m) return;
     if      (m.status === 'setup')     _view = 'setup';
     else if (m.status === 'weigh-in')  _view = 'weighin';
@@ -1721,6 +1940,7 @@ const HM = (() => {
     openAddSchoolModal, saveSchool, removeSchool,
     openAddEntryModal, saveEntry, removeEntry,
     openImportRosterModal, confirmImportRoster,
+    openImportCSVModal, confirmImportCSV,
     backToList, backToSetup, backToWeighIn,
     // Weigh-in
     saveWeighIn, saveOpen, proceedToCompetition,
@@ -1731,9 +1951,9 @@ const HM = (() => {
     // Timer
     startTimer, pauseResumeTimer, resetTimer, _onCompMounted, _tickTimer,
     // Scoreboard
-    _setScoreTab,
+    _setScoreTab, _toggleCompFont,
     // Results
-    syncPRsToRoster, exportResultsCSV,
+    syncPRsToRoster, exportResultsCSV, exportResultsPDF,
     // Phase 3
     toggleFlights, setEntryFlight, _setFlight,
     showStats,
