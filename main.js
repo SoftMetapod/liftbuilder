@@ -153,7 +153,7 @@ async function startPlatformServer(meetState) {
         e[lift][nextIdx].declared = result === 'good' ? att.declared + 5 : att.declared;
       }
       m.lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc,
-                     lift, declared: att.declared, result, attemptIdx, platform: pNum };
+                     lift, declared: att.declared, result, attemptIdx, platform: pNum, publicOptOut: !!e.publicOptOut };
       // Restart clock for next on-deck lifter, or clear if nobody left
       if (ps.checkedIn.length > 0) {
         const nextEntryId       = ps.checkedIn[0].split(':')[0];

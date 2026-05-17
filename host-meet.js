@@ -78,10 +78,11 @@ const HM = (() => {
   function _uid(p) { return p + '_' + Date.now() + '_' + Math.floor(Math.random() * 9999); }
   function _wcs(gender) { return gender === 'Girls' ? GIRLS_WC : BOYS_WC; }
 
-  function _blankEntry(name, schoolId, wc, discipline, athleteId, defaults) {
+  function _blankEntry(name, schoolId, wc, discipline, athleteId, defaults, publicOptOut) {
     return {
       id: _uid('ent'), athleteId: athleteId || null,
       name, schoolId, wc, discipline,
+      publicOptOut: !!publicOptOut,
       flight: 'A', platform: null,
       weighIn: null,
       snatchOpen: defaults?.snatch || 0,
@@ -1414,7 +1415,7 @@ const HM = (() => {
       if (disc !== 'exhibition' && m.entries.filter(e => e.schoolId === homeSchool.id && e.wc === wc && e.discipline !== 'exhibition').length >= 2) { skipped++; return; }
       m.entries.push(_blankEntry(a.name, homeSchool.id, wc, disc, a.id, {
         snatch: _openAttempt(a.snatch), cj: _openAttempt(a.cj), bench: _openAttempt(a.bench),
-      }));
+      }, a.publicOptOut));
       added++;
     });
     _save(); closeModal(); renderMain();
@@ -1565,7 +1566,7 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
     const att = e[lift][attemptIdx]; if (!att) return;
-    _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx, platform: e.platform ?? null };
+    _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx, platform: e.platform ?? null, publicOptOut: !!e.publicOptOut };
     att.result = result;
     // Remove this lifter's stale key and restart clock for next on-deck lifter
     _checkedIn.delete(entryId + ':' + attemptIdx);

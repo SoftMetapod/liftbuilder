@@ -3480,6 +3480,7 @@ function buildRosterHTML() {
       <td style="text-align:center;padding:7px 10px;color:#5EC08A;font-weight:700;">${ot||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:#A07FD4;font-weight:700;">${tt||'—'}</td>
       <td style="padding:7px 8px;white-space:nowrap;">
+        ${a.publicOptOut?`<span title="Excluded from public scoreboards (FERPA opt-out)" style="font-size:13px;margin-right:3px;">🔒</span>`:''}
         ${a.notes?`<span title="${esc(a.notes)}" style="cursor:help;font-size:13px;margin-right:3px;">📝</span>`:''}
         <button onclick="openEditAthlete(${realIdx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;">✏</button>
         <button onclick="deleteAthlete(${realIdx})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;">✕</button>
@@ -3598,8 +3599,15 @@ function athleteFormHTML(a={}) {
       Olympic Total (auto): <strong style="color:#5EC08A;" id="ot-preview">${(a.snatch||0)+(a.cj||0)||'—'}</strong> &nbsp;·&nbsp;
       Traditional Total (auto): <strong style="color:#A07FD4;" id="tt-preview">${(a.bench||0)+(a.cj||0)||'—'}</strong>
     </div>
-    <div class="form-field" style="margin-top:10px;"><label>Coach Notes</label>
+    <div class="form-field" style="margin-top:10px;">
+      <label>Coach Notes <span style="font-size:10px;font-weight:700;color:var(--muted);background:var(--dark3);padding:1px 6px;border-radius:3px;margin-left:4px;letter-spacing:.5px;">PRIVATE</span></label>
       <textarea id="af-notes" rows="3" style="width:100%;resize:vertical;" placeholder="Injuries, cues, status notes…">${esc(a.notes||'')}</textarea>
+    </div>
+    <div class="form-field" style="margin-top:6px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+        <input type="checkbox" id="af-publicOptOut" ${a.publicOptOut?'checked':''} style="accent-color:var(--gold);width:14px;height:14px;flex-shrink:0;">
+        <span>Exclude from public scoreboards <span style="font-size:11px;color:var(--muted);">(FERPA opt-out)</span></span>
+      </label>
     </div>`;
 }
 
@@ -3824,7 +3832,8 @@ function saveAthlete(idx) {
     snatch: parseInt(document.getElementById('af-snatch').value)||0,
     cj:     parseInt(document.getElementById('af-cj').value)||0,
     bench:  parseInt(document.getElementById('af-bench').value)||0,
-    notes:  document.getElementById('af-notes')?.value.trim()||'',
+    notes:       document.getElementById('af-notes')?.value.trim()||'',
+    publicOptOut: !!document.getElementById('af-publicOptOut')?.checked,
   };
   fields.filter(f=>!CORE_FIELDS.includes(f.id)).forEach(f=>{
     const el=document.getElementById('af-'+f.id);
@@ -4779,6 +4788,28 @@ function saveDuplicateWeek() {
   render();
 }
 
+// ── FERPA Notice ──
+const FERPA_KEY = 'liftbuilder_ferpa_ack';
+function checkFerpaNotice() {
+  if (localStorage.getItem(FERPA_KEY)) return;
+  document.getElementById('modal-body').innerHTML = `
+    <h3 style="margin-bottom:.75rem;">Student Privacy Notice</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem;">This app stores student education records subject to <strong style="color:var(--white);">FERPA</strong> (Family Educational Rights and Privacy Act).</p>
+    <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:5px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:1rem;">
+      <div style="margin-bottom:6px;">• Your school must designate athlete names, weight class, and participation as <strong style="color:var(--white);">directory information</strong> and provide parents an annual opt-out notice before displaying names on public scoreboards.</div>
+      <div style="margin-bottom:6px;">• <strong style="color:var(--white);">Coach Notes</strong> are private education records — never share them with other schools or include them in public reports.</div>
+      <div>• To honor a parent opt-out request, edit the athlete's profile and check <strong style="color:var(--white);">"Exclude from public scoreboards."</strong></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gold" onclick="acknowledgeFerpa()">I understand</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+}
+function acknowledgeFerpa() {
+  localStorage.setItem(FERPA_KEY, '1');
+  closeModal();
+}
+
 // ── Init ──
 function initApp() {
   loadState();
@@ -4788,6 +4819,7 @@ function initApp() {
   }
   render();
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); } });
+  checkFerpaNotice();
   // Auto-save on any state change — patch key mutating functions
   const _origSaveNewWeek = saveNewWeek;
   saveNewWeek = function() { _origSaveNewWeek(); saveState(); };

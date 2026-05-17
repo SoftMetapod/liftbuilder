@@ -199,6 +199,7 @@ let _prevLastLiftKey = null;
 
 function _wcs(g) { return g === 'Girls' ? GIRLS_WC : BOYS_WC; }
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s||''); return d.innerHTML; }
+function dName(e) { return e.publicOptOut ? 'Athlete' : esc(e.name); }
 function _bestMade(atts) {
   const w = atts.filter(a => a.result === 'good').map(a => a.declared);
   return w.length ? Math.max(...w) : 0;
@@ -327,8 +328,8 @@ function render(m, ds) {
       const nowLabel = document.getElementById('now-label');
       nowLabel.textContent = 'PREVIOUS LIFT';
       nowLabel.style.color = '#666';
-      document.getElementById('now-name').textContent    = lastLift.name;
-      document.getElementById('now-meta').textContent    = (prevSchool?.name||'') + ' · ' + lastLift.wc + ' lbs · ' + ordinal + ' attempt';
+      document.getElementById('now-name').textContent    = lastLift.publicOptOut ? 'Athlete' : lastLift.name;
+      document.getElementById('now-meta').textContent    = (lastLift.publicOptOut ? '' : (prevSchool?.name||'')) + (lastLift.publicOptOut ? '' : ' · ') + lastLift.wc + ' lbs · ' + ordinal + ' attempt';
       document.getElementById('now-weight').innerHTML    = lastLift.declared + ' <span>lbs</span>';
       document.getElementById('now-attempt').textContent = STATUS_LABEL[lastLift.lift] || lastLift.lift;
       document.getElementById('now-dots').innerHTML      = prevEntry ? _dots(prevEntry[lastLift.lift], -1) : '';
@@ -356,8 +357,8 @@ function render(m, ds) {
     const att     = current[lift][idx];
     const school  = (m.schools||[]).find(s => s.id === current.schoolId);
     const ordinal = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
-    document.getElementById('now-name').textContent      = current.name;
-    document.getElementById('now-meta').textContent      = (school?.name||'') + ' · ' + current.wc + ' lbs' + (m.useFlights ? ' · Flight ' + (current.flight||'A') : '');
+    document.getElementById('now-name').textContent      = current.publicOptOut ? 'Athlete' : current.name;
+    document.getElementById('now-meta').textContent      = (current.publicOptOut ? '' : (school?.name||'') + ' · ') + current.wc + ' lbs' + (m.useFlights ? ' · Flight ' + (current.flight||'A') : '');
     document.getElementById('now-weight').innerHTML      = att.declared + ' <span>lbs</span>';
     document.getElementById('now-attempt').textContent   = ordinal + ' attempt — ' + (STATUS_LABEL[lift]||lift);
     document.getElementById('now-dots').innerHTML        = _dots(current[lift], idx);
@@ -381,7 +382,7 @@ function render(m, ds) {
       return `<div class="q-row">
         <div class="q-num">${qi+2}</div>
         <div>
-          <div class="q-name">${esc(e.name)}</div>
+          <div class="q-name">${dName(e)}</div>
           <div class="q-meta">${esc(qSchool?.name||'')} · ${e.wc}${m.useFlights?' · Flt '+(e.flight||'A'):''}</div>
           <div class="q-dots">${_dots(e[lift], qi_idx)}</div>
         </div>
@@ -411,7 +412,7 @@ function render(m, ds) {
         const sch = (m.schools||[]).find(s => s.id===r.e.schoolId);
         return `<div class="score-row${r.tot>0&&p===1?' first':''}">
           <div class="score-place${r.tot>0&&p<=3?' gold':''}" style="font-size:${medal?'20px':'18px'}">${placeDisplay}</div>
-          <div><div class="score-name">${esc(r.e.name)}</div><div class="score-school">${esc(sch?.name||'')}</div></div>
+          <div><div class="score-name">${dName(r.e)}</div><div class="score-school">${r.e.publicOptOut ? '' : esc(sch?.name||'')}</div></div>
           <div class="score-total${!r.tot?' bomb':''}">${r.tot||'0'}</div>
         </div>`;
       }).join('');
