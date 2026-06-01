@@ -123,6 +123,7 @@ td{border-bottom:1px solid var(--dark3);}
   <div id="hdr-phase">—</div>
   <div id="hdr-bar"></div>
   <div id="hdr-timer" style="display:none;font-family:'Barlow Condensed',Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:4px;background:rgba(201,168,76,.15);color:var(--gold);"></div>
+  <button onclick="window.open('/display/'+platformNum,'_blank')" style="font-size:11px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;padding:3px 10px;border:1px solid rgba(94,192,138,.4);border-radius:4px;background:none;color:#5EC08A;cursor:pointer;letter-spacing:.5px;">📺 Display</button>
   <div id="conn-badge" class="off">OFFLINE</div>
 </div>
 
@@ -137,6 +138,10 @@ td{border-bottom:1px solid var(--dark3);}
       <div style="width:1px;background:var(--dark4);height:20px;"></div>
       <span id="round-badge" class="round-badge">1st Attempt</span>
       <button id="next-round-btn" class="btn btn-outline" style="font-size:12px;padding:4px 12px;" onclick="advanceRound()">→ 2nd Attempt</button>
+      <div id="next-weight-wrap" style="margin-left:auto;display:none;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--muted);">Next weight:</span>
+        <button id="next-weight-btn" class="btn btn-outline" style="font-size:13px;padding:5px 14px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;"></button>
+      </div>
     </div>
 
     <!-- now lifting -->
@@ -163,6 +168,18 @@ td{border-bottom:1px solid var(--dark3);}
     <!-- waiting msg -->
     <div id="waiting-msg"></div>
 
+    <!-- break timer (between phases) -->
+    <div class="card" id="break-card" style="display:none;padding:28px 24px;text-align:center;">
+      <div class="card-label" style="margin-bottom:4px;">BETWEEN PHASES</div>
+      <div id="break-phase-label" style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:12px;"></div>
+      <div id="break-clock" style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:80px;font-weight:700;color:var(--green);letter-spacing:2px;line-height:1;"></div>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap;">
+        <button id="btn-break-pause"  onclick="pauseBreak()"  style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:6px 18px;border:2px solid #E0A040;color:#E0A040;background:none;border-radius:5px;cursor:pointer;">⏸ Pause</button>
+        <button id="btn-break-resume" onclick="resumeBreak()" style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:6px 18px;border:2px solid var(--green);color:var(--green);background:none;border-radius:5px;cursor:pointer;display:none;">▶ Resume</button>
+        <button id="btn-break-reset"  onclick="resetBreak()"  style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:6px 18px;border:2px solid var(--red);color:var(--red);background:none;border-radius:5px;cursor:pointer;">✕ End Break</button>
+      </div>
+    </div>
+
     <!-- on deck -->
     <div class="card" id="deck-card" style="display:none;">
       <div class="section-label">ON DECK</div>
@@ -184,7 +201,15 @@ td{border-bottom:1px solid var(--dark3);}
     <!-- phase done -->
     <div id="phase-done">
       <div id="phase-done-text"></div>
-      <button class="btn btn-gold" onclick="advancePhase()">Advance →</button>
+      <div id="break-picker" style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;margin:16px 0 6px;">
+        <span style="font-size:12px;color:var(--muted);">Break:</span>
+        <button class="btn btn-outline bdur-btn" id="bdur-0"   onclick="selectDuration(0)"   style="font-size:12px;padding:4px 12px;border-color:var(--gold);color:var(--gold);">No Break</button>
+        <button class="btn btn-outline bdur-btn" id="bdur-300" onclick="selectDuration(300)"  style="font-size:12px;padding:4px 12px;">5 min</button>
+        <button class="btn btn-outline bdur-btn" id="bdur-600" onclick="selectDuration(600)"  style="font-size:12px;padding:4px 12px;">10 min</button>
+        <button class="btn btn-outline bdur-btn" id="bdur-900" onclick="selectDuration(900)"  style="font-size:12px;padding:4px 12px;">15 min</button>
+        <input id="bdur-custom" type="number" min="1" max="120" placeholder="min" title="Custom minutes" style="width:60px;background:var(--dark);color:var(--white);border:1px solid var(--dark4);border-radius:4px;padding:4px 6px;font-size:13px;text-align:center;" oninput="selectCustomDuration(this.value)">
+      </div>
+      <button class="btn btn-gold" id="phase-advance-btn" onclick="advancePhase()">Advance →</button>
     </div>
   </div>
 
@@ -210,7 +235,8 @@ td{border-bottom:1px solid var(--dark3);}
     <div id="modal-sub" class="sub"></div>
     <input type="number" id="modal-weight" min="45" step="5">
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">Skip</button>
+      <button id="modal-scratch-btn" class="btn btn-outline" style="color:var(--red);border-color:var(--red);margin-right:auto;display:none;" onclick="scratchFromModal()">Scratch</button>
+      <button id="modal-skip-btn" class="btn btn-outline" onclick="closeModal()">Skip</button>
       <button class="btn btn-gold" onclick="confirmDeclare()">Confirm →</button>
     </div>
   </div>
@@ -297,19 +323,54 @@ function setBarWeight(){
   socket.emit('set-bar-weight',{ pNum:platformNum, weight:w });
 }
 function advanceRound(){
-  if(!confirm('Advance to next attempt round?')) return;
   socket.emit('advance-attempt-round',{ pNum:platformNum });
+}
+let _breakDuration = 0;
+
+function selectDuration(seconds){
+  _breakDuration = seconds;
+  document.querySelectorAll('.bdur-btn').forEach(b=>{ b.style.borderColor=''; b.style.color=''; });
+  const btn = document.getElementById('bdur-'+seconds);
+  if(btn){ btn.style.borderColor='var(--gold)'; btn.style.color='var(--gold)'; }
+  document.getElementById('bdur-custom').value='';
+}
+function selectCustomDuration(val){
+  const secs = parseInt(val)*60;
+  if(!isNaN(secs)&&secs>0){
+    _breakDuration = secs;
+    document.querySelectorAll('.bdur-btn').forEach(b=>{ b.style.borderColor=''; b.style.color=''; });
+  }
 }
 function advancePhase(){
   if(!confirm('Advance to the next phase? This cannot be undone.')) return;
-  socket.emit('advance-phase',{ pNum:platformNum });
+  socket.emit('advance-phase',{ pNum:platformNum, breakDuration:_breakDuration });
+  _breakDuration = 0;
+  selectDuration(0);
 }
+function pauseBreak()  { socket.emit('pause-break',  { pNum:platformNum }); }
+function resumeBreak() { socket.emit('resume-break', { pNum:platformNum }); }
+function resetBreak()  { socket.emit('reset-break',  { pNum:platformNum }); }
 function checkIn(entryId, attemptIdx){
   socket.emit('check-in',{ pNum:platformNum, entryId, attemptIdx });
 }
 function passAttempt(entryId){
-  if(!confirm('Pass all remaining attempts for this lifter?')) return;
-  socket.emit('pass-attempt',{ pNum:platformNum, entryId, lift:_ps.status });
+  const e = _meet.entries.find(x=>x.id===entryId);
+  if(!e) return;
+  const lift = _ps.status;
+  const idx  = _curIdx(e,lift);
+  if(idx < 0) return;
+  const minW = (_ps.barWeight || e[lift][idx].declared) + 5;
+  const ord  = ORDINALS[idx]||(idx+1)+'th';
+  _pending = { entryId, lift, nextIdx:idx, minW, name:e.name, ordinal:ord, isPass:true };
+  document.getElementById('modal-title').textContent = 'Pass — Declare New Weight';
+  document.getElementById('modal-sub').textContent   = `${e.name} — ${ord} attempt. New minimum: ${minW} lbs`;
+  document.getElementById('modal-skip-btn').textContent = 'Cancel';
+  document.getElementById('modal-scratch-btn').style.display = 'none';
+  const inp = document.getElementById('modal-weight');
+  inp.min   = minW;
+  inp.value = minW;
+  document.getElementById('modal-overlay').style.display='flex';
+  setTimeout(()=>{ inp.focus(); inp.select(); },50);
 }
 function scratchEntry(entryId){
   if(!confirm('Scratch this lifter from the remainder of this phase?')) return;
@@ -329,6 +390,8 @@ function declareWaiting(entryId, attemptIdx){
                ordinal:(['1st','2nd','3rd'][attemptIdx]||(attemptIdx+1)+'th') };
   document.getElementById('modal-title').textContent='Change Declared Weight';
   document.getElementById('modal-sub').textContent=`${e.name} — ${_pending.ordinal} attempt (min ${minW} lbs)`;
+  document.getElementById('modal-skip-btn').textContent = 'Cancel';
+  document.getElementById('modal-scratch-btn').style.display = '';
   const inp=document.getElementById('modal-weight');
   inp.min=minW; inp.value=att.declared||minW;
   document.getElementById('modal-overlay').style.display='flex';
@@ -351,6 +414,8 @@ function openModal(){
   if(!_pending) return;
   document.getElementById('modal-title').textContent = `Declare ${_pending.ordinal} Attempt`;
   document.getElementById('modal-sub').textContent   = `${_pending.name} — minimum ${_pending.minW} lbs`;
+  document.getElementById('modal-skip-btn').textContent = 'Skip';
+  document.getElementById('modal-scratch-btn').style.display = _pending.isPass ? 'none' : '';
   const inp = document.getElementById('modal-weight');
   inp.min   = _pending.minW;
   inp.value = _pending.minW;
@@ -361,11 +426,28 @@ function closeModal(){
   document.getElementById('modal-overlay').style.display='none';
   _pending = null;
 }
+function scratchFromModal(){
+  if(!_pending) return;
+  const { entryId, lift, name } = _pending;
+  closeModal();
+  if(!confirm(`Scratch ${name} from the remainder of ${STATUS_LABEL[lift]||lift}?`)) return;
+  socket.emit('scratch-entry',{ pNum:platformNum, entryId, lift });
+}
+function overrideCheckIn(entryId, idx, reason){
+  const e = _meet.entries.find(x=>x.id===entryId);
+  if(!e) return;
+  if(!confirm(`Override check-in for ${e.name}?\n(${reason})\nThis athlete normally cannot check in at this bar weight.`)) return;
+  socket.emit('check-in',{ pNum:platformNum, entryId, attemptIdx:idx });
+}
 function confirmDeclare(){
   if(!_pending) return;
   const w = parseInt(document.getElementById('modal-weight').value)||0;
   if(w < _pending.minW){ alert(`Minimum weight is ${_pending.minW} lbs.`); return; }
-  socket.emit('declare-attempt',{ entryId:_pending.entryId, lift:_pending.lift, attemptIdx:_pending.nextIdx, weight:w });
+  if(_pending.isPass){
+    socket.emit('pass-attempt',{ pNum:platformNum, entryId:_pending.entryId, lift:_pending.lift, weight:w });
+  } else {
+    socket.emit('declare-attempt',{ entryId:_pending.entryId, lift:_pending.lift, attemptIdx:_pending.nextIdx, weight:w });
+  }
   closeModal();
 }
 document.getElementById('modal-weight').addEventListener('keydown', e=>{ if(e.key==='Enter') confirmDeclare(); });
@@ -385,11 +467,12 @@ function render(){
   document.getElementById('hdr-meet').textContent     = m.name || 'LiftBuilder';
   document.getElementById('hdr-phase').textContent    = STATUS_LABEL[lift] || lift;
   const barBadge = document.getElementById('hdr-bar');
-  if(bw){ barBadge.style.display=''; barBadge.textContent='BAR: '+bw+' lbs'; }
+  if(bw){ barBadge.style.display='block'; barBadge.textContent='BAR: '+bw+' lbs'; }
   else   { barBadge.style.display='none'; }
 
-  // Round badge + unlock button
+  // Round badge + advance button (matches single-platform bar control)
   document.getElementById('round-badge').textContent = (ORDINALS[ar-1]||ar+'th')+' Attempt';
+  document.getElementById('round-badge').style.display='';
   const nrBtn = document.getElementById('next-round-btn');
   if(ar<3){ nrBtn.style.display=''; nrBtn.textContent='→ '+(ORDINALS[ar]||'Next')+' Attempt'; }
   else     { nrBtn.style.display='none'; }
@@ -419,19 +502,44 @@ function render(){
   const current   = checkedIn[0]||null;
   const onDeck    = checkedIn.slice(1);
 
+  // Suggested next weight button (needs checkedIn to be defined first)
+  const nextWrap = document.getElementById('next-weight-wrap');
+  const nextWBtn = document.getElementById('next-weight-btn');
+  if(bw && checkedIn.length===0){
+    const nextW = bw + 5;
+    nextWBtn.textContent = 'Load '+nextW+' lbs →';
+    nextWBtn.onclick = ()=>{ document.getElementById('bar-input').value=nextW; setBarWeight(); };
+    nextWrap.style.display='flex';
+  } else {
+    nextWrap.style.display='none';
+  }
+
   const phaseComplete = pEntries.filter(e=>_eligibleForLift(e,lift)).every(e=>e[lift].every(a=>a.result!==null));
+
+  // Break timer card
+  const hasBreak  = !!(ps.breakEndMs || ps.breakPausedRem != null);
+  const breakCard = document.getElementById('break-card');
+  if(hasBreak && lift!=='complete'){
+    breakCard.style.display='';
+    const nextLabel = lift==='snatch'?'Clean & Jerk':(lift==='cj'?'Bench':'Complete');
+    document.getElementById('break-phase-label').textContent='Next: '+nextLabel;
+  } else {
+    breakCard.style.display='none';
+  }
 
   // Phase done banner
   const pdDiv = document.getElementById('phase-done');
   const pdTxt = document.getElementById('phase-done-text');
   if(lift==='complete'){
-    pdDiv.style.display=''; pdTxt.textContent='Platform Complete 🏆';
-    document.querySelector('#phase-done .btn').style.display='none';
+    pdDiv.style.display='block'; pdTxt.textContent='Platform Complete 🏆';
+    document.getElementById('phase-advance-btn').style.display='none';
+    document.getElementById('break-picker').style.display='none';
   } else if(phaseComplete){
-    pdDiv.style.display=''; pdTxt.textContent=(STATUS_LABEL[lift]||lift)+' phase complete';
-    document.querySelector('#phase-done .btn').style.display='';
+    pdDiv.style.display='block'; pdTxt.textContent=(STATUS_LABEL[lift]||lift)+' phase complete';
+    document.getElementById('phase-advance-btn').style.display='block';
+    document.getElementById('break-picker').style.display='flex';
     const nextLabel = lift==='snatch'?'Clean & Jerk':(lift==='cj'?'Bench / Complete':'Complete Meet');
-    document.querySelector('#phase-done .btn').textContent='Advance to '+nextLabel+' →';
+    document.getElementById('phase-advance-btn').textContent='Advance to '+nextLabel+' →';
   } else {
     pdDiv.style.display='none';
   }
@@ -482,13 +590,13 @@ function render(){
       ? '<div style="display:inline-block;background:rgba(30,100,50,.35);border:2px solid var(--green);border-radius:8px;padding:12px 24px;font-size:28px;font-weight:900;color:var(--green);letter-spacing:2px;">✓ GOOD LIFT</div>'
       : '<div style="display:inline-block;background:rgba(100,20,20,.35);border:2px solid var(--red);border-radius:8px;padding:12px 24px;font-size:28px;font-weight:900;color:var(--red);letter-spacing:2px;">✗ NO LIFT</div>';
     _currentId  = null; _currentIdx = null;
-    waitingMsg.style.display='';
+    waitingMsg.style.display= hasBreak ? 'none' : 'block';
     waitingMsg.textContent = bw ? 'Bar loaded at '+bw+' lbs — waiting for check-in…' : 'Waiting for next athlete to check in…';
   } else {
     nowCard.style.display='none';
     _currentId=null; _currentIdx=null;
-    if(!phaseComplete){
-      waitingMsg.style.display='';
+    if(!phaseComplete && !hasBreak){
+      waitingMsg.style.display='block';
       waitingMsg.textContent = bw ? 'Bar loaded at '+bw+' lbs — waiting for check-in…' : 'Set bar weight to begin.';
     } else {
       waitingMsg.style.display='none';
@@ -525,6 +633,13 @@ function render(){
       const idx = _curIdx(e,lift); const att=e[lift][idx];
       const sch = m.schools.find(s=>s.id===e.schoolId);
       const canCI = bw && idx===ar-1 && !_checkInBlocked(e,lift,bw);
+      const isBlocked = bw && !canCI && _checkInBlocked(e,lift,bw);
+      let blockReason = '';
+      if(isBlocked){
+        const prevDone = e[lift].filter(a=>a.result!==null);
+        const hi = prevDone.length ? Math.max(...prevDone.map(a=>a.declared)) : 0;
+        blockReason = bw < hi ? `LIFTED ${hi}` : 'MADE THIS WT';
+      }
       let divider = '';
       if(!canCI && !passedDiv && waiting.some(x=>{
         const xi=_curIdx(x,lift); return bw&&xi===ar-1&&!_checkInBlocked(x,lift,bw);
@@ -535,10 +650,11 @@ function render(){
         <td class="td-p">${_dots(e[lift],idx)}</td>
         <td class="td-r"><span class="wt-lg">${att.declared||'—'}</span> <span class="muted" style="font-size:11px;">lbs</span></td>
         <td class="td-p" style="white-space:nowrap;">
+          ${isBlocked ? `<span style="font-size:10px;color:var(--muted);letter-spacing:.5px;margin-right:4px;">${blockReason}</span>` : ''}
           <button onclick="declareWaiting('${e.id}',${idx})" style="background:none;border:1px solid #444;border-radius:3px;cursor:pointer;color:#888;font-size:10px;padding:2px 7px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:600;margin-right:3px;">DECLARE</button>
           ${canCI
             ? `<button onclick="checkIn('${e.id}',${idx})" style="background:none;border:1px solid var(--green);border-radius:3px;cursor:pointer;color:var(--green);font-size:11px;padding:3px 10px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;">CHECK IN</button>`
-            : bw ? `<button onclick="checkIn('${e.id}',${idx})" style="background:none;border:1px solid #666;border-radius:3px;cursor:pointer;color:#666;font-size:10px;padding:2px 7px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:600;">OVERRIDE</button>` : ''
+            : bw ? `<button onclick="overrideCheckIn('${e.id}',${idx},'${blockReason||'Wrong round'}')" style="background:none;border:1px solid #666;border-radius:3px;cursor:pointer;color:#666;font-size:10px;padding:2px 7px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:600;">OVERRIDE</button>` : ''
           }
           <button onclick="scratchEntry('${e.id}')" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;padding:2px 4px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:600;margin-left:3px;">SCRATCH</button>
         </td>
@@ -688,6 +804,35 @@ setInterval(()=>{
 function pauseClock()  { socket.emit('pause-clock',  { pNum: platformNum }); }
 function resumeClock() { socket.emit('resume-clock', { pNum: platformNum }); }
 function resetClock()  { socket.emit('reset-clock',  { pNum: platformNum }); }
+
+// ── Break timer countdown ─────────────────────────────────────────────────────
+setInterval(()=>{
+  const el        = document.getElementById('break-clock');
+  const btnPause  = document.getElementById('btn-break-pause');
+  const btnResume = document.getElementById('btn-break-resume');
+  if(!el || !_ps) return;
+  const paused = _ps.breakPausedRem;
+  const endMs  = _ps.breakEndMs;
+  if(paused != null){
+    const rem  = Math.max(0, paused);
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = mins + ':' + String(secs).padStart(2,'0');
+    el.style.color   = rem <= 30000 ? 'var(--red)' : rem <= 60000 ? '#E0A040' : 'var(--green)';
+    el.style.opacity = '0.6';
+    if(btnPause)  btnPause.style.display  = 'none';
+    if(btnResume) btnResume.style.display = '';
+  } else if(endMs){
+    const rem  = Math.max(0, endMs - Date.now());
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = mins + ':' + String(secs).padStart(2,'0');
+    el.style.color   = rem <= 30000 ? 'var(--red)' : rem <= 60000 ? '#E0A040' : 'var(--green)';
+    el.style.opacity = '1';
+    if(btnPause)  btnPause.style.display  = '';
+    if(btnResume) btnResume.style.display = 'none';
+  }
+}, 250);
 </script>
 </body>
 </html>

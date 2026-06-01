@@ -256,14 +256,7 @@ const HM = (() => {
         }).join('')
       : `<div class="empty-msg" style="padding:4rem;">No hosted meets yet.<br>Create one to get started.</div>`;
 
-    return `
-      <div class="week-bar">
-        <div class="week-title">Host a Meet</div>
-        <div style="flex:1;"></div>
-        <button onclick="HM.showStats()" class="btn btn-outline" style="font-size:13px;">📊 Stats</button>
-        <button onclick="HM.newMeet()" class="btn btn-gold" style="font-size:13px;margin-left:8px;">+ New Meet</button>
-      </div>
-      <div style="max-width:800px;">${cards}</div>`;
+    return `<div style="max-width:800px;">${cards}</div>`;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -273,21 +266,54 @@ const HM = (() => {
     const m = _meet();
     if (!m) { _view = 'list'; return _buildListHTML(); }
 
-    const schoolRows = m.schools.map(s => `
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--dark2);border-radius:5px;margin-bottom:6px;border:1px solid var(--dark3);">
-        <span style="flex:1;font-size:14px;font-weight:500;">${esc(s.name)}</span>
-        ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : ''}
+    const TEAM_COLORS = [
+      '#E85252','#E8A052','#FFD700','#5EC08A','#3A86D4','#A87FD4','#F5F5F5',
+    ];
+    const schoolRows = m.schools.map(s => {
+      const col = s.color || '#C9A84C';
+      const isPreset = TEAM_COLORS.includes(col);
+      const swatches = TEAM_COLORS.map(c =>
+        `<button onclick="HM.setSchoolColor('${s.id}','${c}')" title="${c}"
+          style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid ${col===c?'#fff':'transparent'};
+          outline:${col===c?'2px solid '+c:'none'};outline-offset:1px;cursor:pointer;padding:0;flex-shrink:0;"></button>`
+      ).join('');
+      return `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--dark2);border-radius:5px;margin-bottom:6px;border:1px solid ${col}40;">
+        <div style="width:4px;align-self:stretch;border-radius:2px;background:${col};flex-shrink:0;margin-top:2px;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:500;margin-bottom:7px;display:flex;align-items:center;gap:8px;">
+            ${esc(s.name)}
+            ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+            ${swatches}
+            <label title="Custom color" style="position:relative;width:22px;height:22px;flex-shrink:0;cursor:pointer;">
+              <div style="width:22px;height:22px;border-radius:50%;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+                border:2px solid ${!isPreset?'#fff':'transparent'};outline:${!isPreset?'2px solid '+col:'none'};outline-offset:1px;"></div>
+              <input type="color" value="${col}" onchange="HM.setSchoolColor('${s.id}',this.value)"
+                style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;">
+            </label>
+          </div>
+        </div>
         <button onclick="HM.removeSchool('${s.id}')"
-          style="background:none;border:none;cursor:pointer;color:#555;font-size:14px;padding:2px 5px;"
+          style="background:none;border:none;cursor:pointer;color:#555;font-size:14px;padding:2px 5px;flex-shrink:0;"
           onmouseenter="this.style.color='#E07070'" onmouseleave="this.style.color='#555'">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
-    const entryRows = m.entries.map(e => {
+    const entryRows = [...m.entries].sort((a, b) => {
+      const wcA = parseFloat(a.wc) || 9999;
+      const wcB = parseFloat(b.wc) || 9999;
+      if (wcA !== wcB) return wcA - wcB;
+      const schA = (m.schools.find(s => s.id === a.schoolId)?.name || '').toLowerCase();
+      const schB = (m.schools.find(s => s.id === b.schoolId)?.name || '').toLowerCase();
+      return schA < schB ? -1 : schA > schB ? 1 : 0;
+    }).map(e => {
       const school = m.schools.find(s => s.id === e.schoolId);
       const ef = e.flight || 'A';
       return `<tr style="border-bottom:1px solid var(--dark3);">
-        <td style="padding:8px 10px;font-weight:500;">${esc(e.name)}</td>
-        <td style="padding:8px 10px;color:var(--muted);font-size:13px;">${esc(school?.name||'—')}</td>
+        <td style="padding:8px 10px;font-weight:500;"><span style="border-bottom:2px solid ${school?.color||'#555'};padding-bottom:1px;">${esc(e.name)}</span></td>
+        <td style="padding:8px 10px;font-size:13px;color:${school?.color||'var(--muted)'};">${esc(school?.name||'—')}</td>
         <td style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:600;">${e.wc}</td>
         <td style="padding:8px 10px;text-align:center;font-size:12px;color:var(--muted);">${{both:'Both',traditional:'Traditional',olympic:'Olympic',exhibition:'Exhibition'}[e.discipline]||e.discipline}</td>
         ${m.useFlights ? `
@@ -307,7 +333,10 @@ const HM = (() => {
             ${Array.from({length:m.numPlatforms},(_,i)=>i+1).map(n=>`<option value="${n}" ${e.platform===n?'selected':''}>P${n}</option>`).join('')}
           </select>
         </td>` : ''}
-        <td style="padding:8px 10px;text-align:right;">
+        <td style="padding:8px 10px;text-align:right;white-space:nowrap;">
+          <button onclick="HM.openEditEntryModal('${e.id}')"
+            style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 6px;"
+            onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">✏</button>
           <button onclick="HM.removeEntry('${e.id}')"
             style="background:none;border:none;cursor:pointer;color:#555;font-size:12px;padding:2px 5px;"
             onmouseenter="this.style.color='#E07070'" onmouseleave="this.style.color='#555'">✕</button>
@@ -319,18 +348,6 @@ const HM = (() => {
     const canProceed = m.name.trim() && m.schools.length >= 2 && m.entries.length > 0;
 
     return `
-      <div class="week-bar">
-        <button onclick="HM.backToList()"
-          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-          onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← Back</button>
-        <div class="week-title" style="margin-left:12px;">Meet Setup</div>
-        <div style="flex:1;"></div>
-        <button onclick="HM.saveSetupAndProceed()" class="btn btn-gold" style="font-size:13px;"
-          ${canProceed?'':'disabled'} title="${canProceed?'Proceed to weigh-in':'Requires: meet name, 2+ schools, 1+ athlete'}">
-          Proceed to Weigh-In →
-        </button>
-      </div>
-
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;max-width:1000px;">
         <div class="chart-card">
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;">Meet Info</div>
@@ -426,8 +443,8 @@ const HM = (() => {
         const needBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
         return `<tr style="border-bottom:1px solid var(--dark3);">
           <td style="padding:9px 12px;">
-            <div style="font-weight:500;font-size:14px;">${esc(e.name)}${m.useFlights?` <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:700;">FLT ${e.flight||'A'}</span>`:''}</div>
-            <div style="font-size:11px;color:var(--muted);">${esc(school?.name||'')} · ${{both:'Both',traditional:'Traditional',olympic:'Olympic',exhibition:'Exhibition'}[e.discipline]||e.discipline}</div>
+            <div style="font-weight:500;font-size:14px;"><span style="border-bottom:2px solid ${school?.color||'#555'};padding-bottom:1px;">${esc(e.name)}</span>${m.useFlights?` <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:700;">FLT ${e.flight||'A'}</span>`:''}</div>
+            <div style="font-size:11px;color:var(--muted);"><span style="color:${school?.color||'var(--muted)'};">${esc(school?.name||'')}</span> · ${{both:'Both',traditional:'Traditional',olympic:'Olympic',exhibition:'Exhibition'}[e.discipline]||e.discipline}</div>
           </td>
           <td style="padding:9px 12px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -492,18 +509,6 @@ const HM = (() => {
     const allDone      = totalWeighed === m.entries.length && m.entries.length > 0;
 
     return `
-      <div class="week-bar">
-        <button onclick="HM.backToSetup()"
-          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-          onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← Back to Setup</button>
-        <div class="week-title" style="margin-left:12px;">Weigh-In — ${esc(m.name)}</div>
-        <div style="flex:1;"></div>
-        <span id="hm-wi-counter" style="font-size:13px;color:var(--muted);margin-right:14px;">${totalWeighed} / ${m.entries.length} weighed in</span>
-        <button id="hm-wi-proceed-btn" onclick="HM.proceedToCompetition()" class="btn btn-gold" style="font-size:13px;"
-          ${allDone?'':'disabled'} title="${allDone?'Start the competition':'All athletes must be weighed in first'}">
-          Begin Competition →
-        </button>
-      </div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;padding:10px 14px;background:var(--dark2);border:1px solid var(--dark3);border-left:3px solid var(--gold);border-radius:4px;max-width:900px;">
         Record each athlete's actual weigh-in weight and opening attempts. C&J is required for all athletes regardless of discipline.
       </div>
@@ -574,13 +579,14 @@ const HM = (() => {
       const att     = current[lift][idx];
       const school  = m.schools.find(s => s.id === current.schoolId);
       const ordinal = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
+      const nowColor = school?.color || 'var(--gold)';
       nowHTML = `
-        <div style="background:var(--dark2);border:2px solid var(--gold);border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1rem;">
+        <div style="background:var(--dark2);border:2px solid var(--gold);border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1rem;border-left:5px solid ${nowColor};">
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1.5px;color:var(--gold);margin-bottom:.5rem;">NOW LIFTING</div>
           <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
             <div>
-              <div style="font-size:22px;font-weight:700;font-family:'Barlow Condensed',sans-serif;">${esc(current.name)}</div>
-              <div style="font-size:13px;color:var(--muted);margin-top:2px;">${esc(school?.name||'?')} &nbsp;·&nbsp; ${current.wc} lbs &nbsp;·&nbsp; ${ordinal} attempt</div>
+              <div style="font-size:22px;font-weight:700;font-family:'Barlow Condensed',sans-serif;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${nowColor};flex-shrink:0;"></span>${esc(current.name)}</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:2px;"><span style="color:${nowColor};">${esc(school?.name||'?')}</span> &nbsp;·&nbsp; ${current.wc} lbs &nbsp;·&nbsp; ${ordinal} attempt</div>
               <div style="font-size:30px;font-weight:700;font-family:'Barlow Condensed',sans-serif;margin-top:.4rem;color:var(--gold);">${att.declared} <span style="font-size:16px;color:var(--muted);">lbs</span></div>
               ${(_clockStart || _clockPausedRemaining !== null) ? `<div style="display:flex;align-items:center;gap:10px;margin-top:.25rem;flex-wrap:wrap;">
                 <div ${_clockPausedRemaining !== null
@@ -633,11 +639,12 @@ const HM = (() => {
         const att  = e[lift][idx];
         const school = m.schools.find(s => s.id === e.schoolId);
         const ord  = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
+        const odColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
           <td style="padding:${fL?'11px':'8px'} 10px;font-size:12px;color:var(--muted);text-align:center;">${qi+2}</td>
           <td style="padding:${fL?'11px':'8px'} 10px;">
-            <div style="font-weight:600;font-size:${fL?'18px':'14px'};">${esc(e.name)}</div>
-            <div style="font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</div>
+            <div style="font-weight:600;font-size:${fL?'18px':'14px'};"><span style="border-bottom:2px solid ${odColor};padding-bottom:1px;">${esc(e.name)}</span></div>
+            <div style="font-size:${fL?'14px':'11px'};color:var(--muted);"><span style="color:${odColor};">${esc(school?.name||'')}</span> · ${e.wc} · ${ord}</div>
           </td>
           <td style="padding:${fL?'11px':'8px'} 10px;">${_dots(e[lift], idx)}</td>
           <td style="padding:${fL?'11px':'8px'} 10px;text-align:right;white-space:nowrap;">
@@ -659,7 +666,7 @@ const HM = (() => {
           <div style="padding:8px 12px;border-bottom:1px solid var(--dark3);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;color:var(--muted);">ON DECK</div>
           <table style="width:100%;border-collapse:collapse;">
             <thead><tr style="border-bottom:1px solid var(--dark3);">
-              <th style="padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);">#</th>
+              <th style="padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);text-align:center;">Place</th>
               <th style="text-align:left;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);">Athlete</th>
               <th style="text-align:left;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);">Atts</th>
               <th style="text-align:right;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);">Declared</th>
@@ -690,9 +697,10 @@ const HM = (() => {
           divider = `<tr><td colspan="5" style="padding:0;border-top:1px dashed var(--dark3);"></td></tr>`;
         }
         const opacity = canCheckIn ? '1' : '0.55';
+        const wtColor = school?.color || '#555';
         return divider + `<tr style="border-bottom:1px solid var(--dark3);opacity:${opacity};">
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'13px'};font-weight:${canCheckIn?'600':'500'};">${esc(e.name)}</td>
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'13px'};font-weight:${canCheckIn?'600':'500'};"><span style="border-bottom:2px solid ${wtColor};padding-bottom:1px;">${esc(e.name)}</span></td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'11px'};color:var(--muted);"><span style="color:${wtColor};">${esc(school?.name||'')}</span> · ${e.wc} · ${ord}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], idx)}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:${fL?'18px':'14px'};font-weight:700;">
             ${att.declared || '—'} <span style="font-size:${fL?'13px':'11px'};color:var(--muted);font-weight:400;">lbs</span>
@@ -734,9 +742,10 @@ const HM = (() => {
       const dRows = done.map(e => {
         const best   = _bestMade(e[lift]);
         const school = m.schools.find(s => s.id === e.schoolId);
+        const doneColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'14px'};font-weight:500;">${esc(e.name)}</td>
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'12px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'14px'};font-weight:500;"><span style="border-bottom:2px solid ${doneColor};padding-bottom:1px;">${esc(e.name)}</span></td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'12px'};color:var(--muted);"><span style="color:${doneColor};">${esc(school?.name||'')}</span> · ${e.wc}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], -1)}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:${fL?'18px':'15px'};color:${best?'var(--gold)':'#E07070'};">${best ? best+' lbs' : 'Bomb'}</td>
         </tr>`;
@@ -765,28 +774,6 @@ const HM = (() => {
     const phaseComplete = _phaseComplete(m, lift);
 
     return `
-      <div class="week-bar">
-        <button onclick="HM.backToWeighIn()"
-          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-          onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← Weigh-In</button>
-        <div class="week-title" style="margin-left:12px;font-size:16px;">${esc(m.name)}</div>
-        <span style="margin-left:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:3px 10px;border-radius:4px;background:var(--gold-a15);color:var(--gold);font-weight:600;">${liftLabel.toUpperCase()}</span>
-        <div style="flex:1;"></div>
-        ${timerHTML}
-        <div style="width:1px;background:var(--dark3);height:24px;margin:0 10px;"></div>
-        <button onclick="HM._toggleCompFont()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;" title="Toggle font size">${_compFontLarge ? 'A−' : 'A+'}</button>
-        <button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;" title="Open live display window">📺 Display</button>
-        ${m.numPlatforms ? `
-        <div style="width:1px;background:var(--dark3);height:24px;margin:0 4px;"></div>
-        ${_platformActive
-          ? `<button onclick="HM.stopPlatforms()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;border-color:#5EC08A;color:#5EC08A;">📡 Stop Platforms</button>`
-          : `<button onclick="HM.startPlatforms()" class="btn btn-gold" style="font-size:12px;padding:5px 12px;">📡 Start Platforms</button>`
-        }` : ''}
-        <button onclick="HM.advancePhase()" class="btn btn-gold" style="font-size:13px;margin-left:6px;" ${phaseComplete?'':'disabled'}
-          title="${phaseComplete?'Move to next phase':'All athletes must finish this lift first'}">
-          ${lift === 'bench' ? 'Complete Meet ✓' : 'Next Phase →'}
-        </button>
-      </div>
       <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none" onload="HM._onCompMounted()">
       ${_platformActive && _platformInfo ? (() => {
         const base = `http://${_platformInfo.ip}:${_platformInfo.port}`;
@@ -839,16 +826,22 @@ const HM = (() => {
                   ${connDot}
                   <button onclick="window.open('${base}/platform/${pNum}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 7px;border:1px solid var(--gold-a50);border-radius:3px;">Open ↗</button>
+                  <button onclick="window.open('${base}/display/${pNum}')"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#5EC08A;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(94,192,138,.4);border-radius:3px;">📺 Display ↗</button>
+                  <button onclick="window.open('${base}/referee/${pNum}/1')"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J1</button>
+                  <button onclick="window.open('${base}/referee/${pNum}/2')"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J2</button>
+                  <button onclick="window.open('${base}/referee/${pNum}/3')"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J3</button>
                 </div>
               </div>
 
               <div style="padding:10px 14px;border-bottom:1px solid var(--dark3);">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   <span style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;">${isDone?'✓ COMPLETE':pLift}</span>
-                  ${!isDone?`
-                    <span style="font-size:11px;color:var(--muted);">${roundLabel} Attempt</span>
-                    ${bw?`<span style="font-size:11px;font-weight:700;padding:1px 7px;background:rgba(94,192,138,.1);color:#5EC08A;border-radius:3px;">BAR: ${bw} lbs</span>`:''}
-                  `:''}
+                  ${!isDone?`<span style="font-size:11px;color:var(--muted);">${roundLabel} Attempt</span>`:``}
+                  ${!isDone&&bw?`<span style="font-size:11px;font-weight:700;padding:1px 7px;background:rgba(94,192,138,.1);color:#5EC08A;border-radius:3px;">BAR: ${bw} lbs</span>`:''}
                 </div>
               </div>
 
@@ -899,6 +892,21 @@ const HM = (() => {
                 </div>`;
               })()}
 
+              ${(() => {
+                const jv = ps.judgeVotes || {};
+                const anyVote = jv[1] || jv[2] || jv[3];
+                if (!anyVote) return '';
+                function lightStyle(v) {
+                  if (v === 'good') return 'background:#1e5c35;border-color:#5EC08A;color:#5EC08A;';
+                  if (v === 'no')   return 'background:#5c1e1e;border-color:#E07070;color:#E07070;';
+                  return 'background:#222;border-color:#444;color:#555;';
+                }
+                return `<div style="padding:6px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--dark3);">
+                  <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);">JUDGES</span>
+                  ${[1,2,3].map(n => `<div style="width:28px;height:28px;border-radius:50%;border:2px solid #444;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;${lightStyle(jv[n])}">${n}</div>`).join('')}
+                </div>`;
+              })()}
+
               <div style="padding:8px 14px;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--dark3);">
                 <span>${pEntries.length} lifters</span>
                 <span>·</span>
@@ -921,11 +929,15 @@ const HM = (() => {
         return `
           <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;align-items:start;">
             <div>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.4rem;flex-wrap:wrap;">
                 <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#5EC08A;">📡 PLATFORMS ACTIVE</span>
                 <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/platform/<em>N</em></code>
                 <span style="font-size:11px;color:var(--muted);">${_connectedPlatforms.length} of ${m.numPlatforms} connected</span>
                 <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:1px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap;">
+                <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#A07FD4;">⚖ JUDGES</span>
+                <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/referee/<em>N</em>/<em>1-3</em></code>
               </div>
               ${allComplete ? `
                 <div style="background:rgba(94,192,138,.1);border:2px solid #5EC08A;border-radius:8px;padding:14px 18px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -968,7 +980,7 @@ const HM = (() => {
     const N    = m.schools.length;
     const pts  = _teamPoints(N);
 
-    const thS  = 'padding:3px 7px;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;color:var(--muted);';
+    const thS  = 'padding:3px 7px;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;color:var(--muted);text-align:center;';
     const thSR = thS + 'text-align:right;';
 
     const tabBtn = (key, label) =>
@@ -993,7 +1005,7 @@ const HM = (() => {
           <div style="padding:5px 7px;background:rgba(201,168,76,.12);border-bottom:1px solid var(--gold-a15);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--gold);">${title}</div>
           <table style="width:100%;border-collapse:collapse;">
             <thead><tr>
-              <th style="${thS}">#</th>
+              <th style="${thS}">Place</th>
               <th style="${thS}text-align:left;">School</th>
               <th style="${thSR}">PTS</th>
             </tr></thead>
@@ -1021,9 +1033,10 @@ const HM = (() => {
               const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
               const placeDisplay = medal || placeNum || '—';
               const sch = m.schools.find(s => s.id === r.e.schoolId);
+              const schColor = sch?.color || '#555';
               return `<tr style="border-bottom:1px solid var(--dark3);">
                 <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
-                <td style="padding:5px 7px;font-size:13px;">${esc(r.e.name)}</td>
+                <td style="padding:5px 7px;font-size:13px;"><span style="border-bottom:2px solid ${schColor};padding-bottom:1px;">${esc(r.e.name)}</span></td>
                 <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.sn||'—'}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.cj||'—'}</td>
@@ -1031,7 +1044,7 @@ const HM = (() => {
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:11px;color:${earnedPts?'#5EC08A':'var(--muted)'};">${earnedPts!=null?'+'+earnedPts:'—'}</td>
               </tr>`;
             }).join('');
-            const hdr = `<tr><th style="${thS}">#</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">SN</th><th style="${thSR}">CJ</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
+            const hdr = `<tr><th style="${thS}">Place</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">SN</th><th style="${thSR}">CJ</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
             return wcSection(wc, hdr, rows);
           }).join('');
 
@@ -1052,9 +1065,10 @@ const HM = (() => {
               const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
               const placeDisplay = medal || placeNum || '—';
               const sch = m.schools.find(s => s.id === r.e.schoolId);
+              const schColor = sch?.color || '#555';
               return `<tr style="border-bottom:1px solid var(--dark3);">
                 <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
-                <td style="padding:5px 7px;font-size:13px;">${esc(r.e.name)}</td>
+                <td style="padding:5px 7px;font-size:13px;"><span style="border-bottom:2px solid ${schColor};padding-bottom:1px;">${esc(r.e.name)}</span></td>
                 <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.cj||'—'}</td>
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.bn||'—'}</td>
@@ -1062,7 +1076,7 @@ const HM = (() => {
                 <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:11px;color:${earnedPts?'#5EC08A':'var(--muted)'};">${earnedPts!=null?'+'+earnedPts:'—'}</td>
               </tr>`;
             }).join('');
-            const hdr = `<tr><th style="${thS}">#</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">C&amp;J</th><th style="${thSR}">Bench</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
+            const hdr = `<tr><th style="${thS}">Place</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">C&amp;J</th><th style="${thSR}">Bench</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
             return wcSection(wc, hdr, rows);
           }).join('');
 
@@ -1128,7 +1142,7 @@ const HM = (() => {
           <div style="padding:5px 7px;background:rgba(201,168,76,.12);border-bottom:1px solid var(--gold-a15);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--gold);">COMBINED TOTAL</div>
           <table style="width:100%;border-collapse:collapse;">
             <thead><tr>
-              <th style="${thS}">#</th>
+              <th style="${thS}">Place</th>
               <th style="${thS}text-align:left;">School</th>
               <th style="${thSR}">OLY + TRAD</th>
               <th style="${thSR}">TOTAL</th>
@@ -1167,9 +1181,10 @@ const HM = (() => {
         const hasBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
         const oTot = hasSnatch ? _olympicTotal(e) : null;
         const tTot = hasBench  ? _traditionalTotal(e) : null;
+        const resColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:8px 10px;font-weight:500;">${esc(e.name)}</td>
-          <td style="padding:8px 10px;font-size:12px;color:var(--muted);">${esc(school?.name||'')}</td>
+          <td style="padding:8px 10px;font-weight:500;cursor:pointer;" onclick="HM.openEditResultModal('${e.id}')" title="Click to edit results"><span style="border-bottom:2px solid ${resColor};padding-bottom:1px;">${esc(e.name)}</span> <span style="font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;">✏</span></td>
+          <td style="padding:8px 10px;font-size:12px;color:${school?.color||'var(--muted)'};">${esc(school?.name||'')}</td>
           <td style="padding:8px 10px;font-size:11px;text-align:center;color:var(--muted);">${discMap[e.discipline]||e.discipline}</td>
           ${hasSnatch
             ? `<td style="padding:8px 6px;text-align:center;">${_dots(e.snatch,-1)}</td>
@@ -1206,18 +1221,6 @@ const HM = (() => {
     }).join('');
 
     return `
-      <div class="week-bar">
-        <button onclick="HM.backToList()"
-          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-          onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← All Meets</button>
-        <div class="week-title" style="margin-left:12px;">${esc(m.name)} — Results</div>
-        <div style="flex:1;"></div>
-        <button onclick="HM.printScoreboard()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;">🖨 Print</button>
-        <button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">📺 Display</button>
-        <button onclick="HM.syncPRsToRoster()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">↑ Sync PRs</button>
-        <button onclick="HM.exportResultsCSV()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">⬇ CSV</button>
-        <button onclick="HM.exportResultsPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:6px;">⬇ PDF</button>
-      </div>
       <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;align-items:start;">
         <div>${wcSections}</div>
         <div style="position:sticky;top:80px;">${_buildScoreboard(m)}</div>
@@ -1286,8 +1289,17 @@ const HM = (() => {
     const name = document.getElementById('hm-school-name')?.value.trim();
     if (!name) { alert('Enter a school name.'); return; }
     const m = _meet(); if (!m) return;
-    m.schools.push({ id: _uid('sch'), name, isHome: !!isHome });
+    const defaultColors = ['#E85252','#3A86D4','#5EC08A','#FFD700','#A87FD4','#E8A052','#F5F5F5'];
+    const color = defaultColors[m.schools.length % defaultColors.length];
+    m.schools.push({ id: _uid('sch'), name, isHome: !!isHome, color });
     _save(); closeModal(); renderMain();
+  }
+
+  function setSchoolColor(schoolId, color) {
+    const m = _meet(); if (!m) return;
+    const s = m.schools.find(x => x.id === schoolId); if (!s) return;
+    s.color = color;
+    _save(); renderMain();
   }
 
   function removeSchool(schoolId) {
@@ -1354,6 +1366,64 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     m.entries = m.entries.filter(e => e.id !== entryId);
     _save(); renderMain();
+  }
+
+  function openEditEntryModal(entryId) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    const wcs = _wcs(m.gender);
+    const schoolOpts = m.schools.map(s => `<option value="${s.id}" ${s.id===e.schoolId?'selected':''}>${esc(s.name)}</option>`).join('');
+    const wcOpts = wcs.map(w => `<option value="${w}" ${w===e.wc?'selected':''}>${w} lbs</option>`).join('');
+    document.getElementById('modal-body').innerHTML = `
+      <h3>Edit Athlete</h3>
+      <div class="fg2">
+        <div class="form-field"><label>Athlete Name</label><input type="text" id="hm-edit-name" value="${esc(e.name)}" placeholder="Full name"></div>
+        <div class="form-field"><label>School</label><select id="hm-edit-school">${schoolOpts}</select></div>
+      </div>
+      <div class="fg2">
+        <div class="form-field">
+          <label>Weight Class</label>
+          <select id="hm-edit-wc">${wcOpts}</select>
+        </div>
+        <div class="form-field">
+          <label>Discipline</label>
+          <select id="hm-edit-disc">
+            <option value="both"        ${e.discipline==='both'        ?'selected':''}>Both (Olympic + Traditional)</option>
+            <option value="traditional" ${e.discipline==='traditional' ?'selected':''}>Traditional only (C&amp;J + Bench)</option>
+            <option value="olympic"     ${e.discipline==='olympic'     ?'selected':''}>Olympic only (Snatch + C&amp;J)</option>
+            <option value="exhibition"  ${e.discipline==='exhibition'  ?'selected':''}>Exhibition</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:.5rem;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="hm-edit-opt" ${e.publicOptOut?'checked':''} style="accent-color:var(--gold);">
+          <span>Public opt-out (hide name on displays)</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="HM.saveEditEntry('${entryId}')">Save</button>
+      </div>`;
+    document.getElementById('overlay').style.display = 'flex';
+    setTimeout(() => { const el = document.getElementById('hm-edit-name'); if(el){el.focus();el.select();} }, 50);
+  }
+
+  function saveEditEntry(entryId) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    const name       = document.getElementById('hm-edit-name')?.value.trim();
+    const schoolId   = document.getElementById('hm-edit-school')?.value;
+    const wc         = document.getElementById('hm-edit-wc')?.value;
+    const discipline = document.getElementById('hm-edit-disc')?.value || 'both';
+    const publicOptOut = !!document.getElementById('hm-edit-opt')?.checked;
+    if (!name) { alert('Enter athlete name.'); return; }
+    e.name        = name;
+    e.schoolId    = schoolId;
+    e.wc          = wc;
+    e.discipline  = discipline;
+    e.publicOptOut = publicOptOut;
+    _save(); closeModal(); renderMain();
   }
 
   function openImportRosterModal() {
@@ -1891,17 +1961,104 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     if (typeof state === 'undefined') { alert('Cannot access roster.'); return; }
     let updated = 0;
+    const meetDate = m.date || new Date().toISOString().slice(0,10);
+    const meetName = m.name || 'Meet';
     m.entries.forEach(e => {
       if (!e.athleteId) return;
       const a = (state.roster?.athletes || []).find(x => x.id === e.athleteId);
       if (!a) return;
-      const sn = _bestMade(e.snatch), cj = _bestMade(e.cj), bn = _bestMade(e.bench);
-      if (sn && sn > (a.snatch || 0)) { a.snatch = sn; updated++; }
-      if (cj && cj > (a.cj    || 0)) { a.cj     = cj; updated++; }
-      if (bn && bn > (a.bench  || 0)) { a.bench  = bn; updated++; }
+      if (!a.prHistory) a.prHistory = { snatch: [], cj: [], bench: [] };
+      const lifts = [['snatch', e.snatch], ['cj', e.cj], ['bench', e.bench]];
+      lifts.forEach(([key, attempts]) => {
+        const best = _bestMade(attempts);
+        if (!best) return;
+        if (best > (a[key] || 0)) {
+          a[key] = best;
+          a.prHistory[key].push({ value: best, date: meetDate, meet: meetName });
+          updated++;
+        }
+      });
     });
     if (typeof saveState === 'function') saveState();
     showToast(updated ? `${updated} PR${updated!==1?'s':''} synced to roster.` : 'No new PRs to sync.');
+  }
+
+  // ── Edit result entry ──────────────────────────────────────────────────────
+  function openEditResultModal(entryId) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    const school = m.schools.find(s => s.id === e.schoolId);
+    const hasSnatch = e.discipline === 'both' || e.discipline === 'olympic'  || e.discipline === 'exhibition';
+    const hasBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
+    const discMap   = { both:'Both', traditional:'Traditional', olympic:'Olympic', exhibition:'Exhibition' };
+    const LIFTS     = [
+      ...(hasSnatch ? [{ key:'snatch', label:'Snatch' }] : []),
+      { key:'cj', label:'Clean & Jerk' },
+      ...(hasBench  ? [{ key:'bench',  label:'Bench'  }] : []),
+    ];
+    const btnBase = 'font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;';
+    function resultBtns(liftKey, idx, cur) {
+      const good = cur === 'good';
+      const no   = cur === 'no';
+      return `<div style="display:flex;gap:4px;">
+        <button onclick="HM._setAttemptResult('${entryId}','${liftKey}',${idx},'good')" style="${btnBase}background:${good?'#1e4a2a':'var(--dark2)'};border-color:${good?'#5EC08A':'var(--dark3)'};color:${good?'#5EC08A':'var(--muted)'};">✓</button>
+        <button onclick="HM._setAttemptResult('${entryId}','${liftKey}',${idx},'no')" style="${btnBase}background:${no?'#4a1e1e':'var(--dark2)'};border-color:${no?'#E07070':'var(--dark3)'};color:${no?'#E07070':'var(--muted)'};">✗</button>
+        <button onclick="HM._setAttemptResult('${entryId}','${liftKey}',${idx},null)" style="${btnBase}background:${cur===null?'var(--dark3)':'var(--dark2)'};border-color:var(--dark3);color:${cur===null?'var(--white)':'var(--muted)'};">—</button>
+      </div>`;
+    }
+    const liftSections = LIFTS.map(({ key, label }) => {
+      const rows = e[key].map((att, idx) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--dark3);">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--muted);width:28px;">${['1st','2nd','3rd'][idx]}</span>
+          <input id="er-${key}-${idx}-w" type="number" value="${att.declared||''}" min="0" step="1" placeholder="—"
+            style="width:80px;background:var(--dark);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:4px 8px;font-size:13px;font-family:'Barlow Condensed',sans-serif;text-align:center;">
+          <span style="font-size:11px;color:var(--muted);">lbs</span>
+          ${resultBtns(key, idx, att.result)}
+        </div>`).join('');
+      return `<div style="margin-bottom:1rem;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">${label}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+    document.getElementById('modal-body').innerHTML = `
+      <h3>Edit Results — ${esc(e.name)}</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 1rem;">${esc(school?.name||'')} · ${e.wc} lbs · ${discMap[e.discipline]||e.discipline}</p>
+      ${liftSections}
+      <div class="modal-actions" style="justify-content:space-between;">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="HM.saveEditResult('${entryId}')">Save Changes</button>
+      </div>`;
+    document.getElementById('overlay').style.display = 'flex';
+  }
+
+  function _setAttemptResult(entryId, liftKey, idx, result) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    e[liftKey][idx].result = result;
+    _save();
+    // Re-render just the result buttons in the open modal
+    openEditResultModal(entryId);
+  }
+
+  function saveEditResult(entryId) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    const hasSnatch = e.discipline === 'both' || e.discipline === 'olympic'  || e.discipline === 'exhibition';
+    const hasBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
+    const LIFTS     = [
+      ...(hasSnatch ? ['snatch'] : []),
+      'cj',
+      ...(hasBench  ? ['bench'] : []),
+    ];
+    LIFTS.forEach(key => {
+      e[key].forEach((att, idx) => {
+        const w = parseFloat(document.getElementById(`er-${key}-${idx}-w`)?.value) || 0;
+        att.declared = w || att.declared;
+      });
+    });
+    _save();
+    closeModal();
+    renderMain();
   }
 
   // ── Export CSV ─────────────────────────────────────────────────────────────
@@ -1970,14 +2127,14 @@ const HM = (() => {
     // ── Team score tables ──────────────────────────────────────────────────
     function teamTableHTML(title, sorted, key) {
       const rows = sorted.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;font-weight:700;">${s[key]}</td></tr>`).join('');
-      return `<h3>${title}</h3><table><thead><tr><th>#</th><th>School</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows}</tbody></table>`;
+      return `<h3>${title}</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     const oTeam = [...teamData].sort((a,b)=>b.olympic-a.olympic);
     const tTeam = [...teamData].sort((a,b)=>b.traditional-a.traditional);
     const combinedRows = teamData.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;">${s.olympic} + ${s.traditional}</td><td style="text-align:right;font-weight:700;font-size:12pt;">${s.total}</td></tr>`).join('');
     const teamHTML = teamTableHTML('Olympic Team Scores', oTeam, 'olympic')
       + teamTableHTML('Traditional Team Scores', tTeam, 'traditional')
-      + `<h3>Combined Total</h3><table><thead><tr><th>#</th><th>School</th><th style="text-align:right;">Oly + Trad</th><th style="text-align:right;">Total</th></tr></thead><tbody>${combinedRows}</tbody></table>`;
+      + `<h3>Combined Total</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Oly + Trad</th><th style="text-align:right;">Total</th></tr></thead><tbody>${combinedRows}</tbody></table>`;
 
     // ── Individual results ─────────────────────────────────────────────────
     function indivSectionHTML(label, elig, totFn, tieKey) {
@@ -2012,7 +2169,7 @@ const HM = (() => {
         const h2 = isSnatch ? 'C&amp;J' : 'Bench';
         return `<h3>${wc} lbs</h3>
           <table><thead><tr>
-            <th>#</th><th>Athlete</th><th>School</th>
+            <th style="text-align:center;">Place</th><th>Athlete</th><th>School</th>
             <th colspan="3" style="text-align:center;">${h1}</th><th style="text-align:right;">Best</th>
             <th colspan="3" style="text-align:center;">${h2}</th><th style="text-align:right;">Best</th>
             <th style="text-align:right;">Total</th><th style="text-align:right;">Pts</th>
@@ -2047,8 +2204,8 @@ const HM = (() => {
 
     if (window.liftbuilderApp?.exportPDF) {
       window.liftbuilderApp.exportPDF(html)
-        .then(r => showToast(r?.success ? 'PDF saved.' : 'PDF export cancelled.'))
-        .catch(() => showToast('PDF export failed.'));
+        .then(r => showToast(r?.success ? 'PDF saved.' : r?.error ? 'PDF failed: ' + r.error : 'PDF export cancelled.'))
+        .catch(e => showToast('PDF export failed: ' + (e?.message || e || 'unknown error')));
     } else {
       const win = window.open('', '_blank', 'width=1000,height=750');
       if (!win) { showToast('Allow pop-ups to export PDF.'); return; }
@@ -2145,6 +2302,8 @@ const HM = (() => {
     _connectedPlatforms = newMeetState._connectedPlatforms || [];
     // Strip runtime-only fields before persisting
     const { _connectedPlatforms: _cp, ...cleanState } = newMeetState;
+    // Keep lastLift in sync so the live display window gets the correct result
+    if ('lastLift' in cleanState) _lastLift = cleanState.lastLift;
     const idx = _meets.findIndex(m => m.id === cleanState.id);
     if (idx >= 0) {
       _meets[idx] = cleanState;
@@ -2191,13 +2350,7 @@ const HM = (() => {
     }).sort((a, b) => a.name.localeCompare(b.name));
 
     if (!athletes.length) {
-      return `
-        <div class="week-bar">
-          <button onclick="HM.backToList()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-            onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← Back</button>
-          <div class="week-title" style="margin-left:12px;">Athlete Stats</div>
-        </div>
-        <div class="empty-msg" style="padding:4rem;">No completed meets yet. Stats will appear after you complete a meet.</div>`;
+      return `<div class="empty-msg" style="padding:4rem;">No completed meets yet. Stats will appear after you complete a meet.</div>`;
     }
 
     const rows = athletes.map(a => `
@@ -2222,13 +2375,6 @@ const HM = (() => {
       </tr>`).join('');
 
     return `
-      <div class="week-bar">
-        <button onclick="HM.backToList()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;"
-          onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">← Back</button>
-        <div class="week-title" style="margin-left:12px;">Athlete Stats</div>
-        <div style="flex:1;"></div>
-        <span style="font-size:12px;color:var(--muted);">${athletes.length} athlete${athletes.length!==1?'s':''} across ${completed.length} completed meet${completed.length!==1?'s':''}</span>
-      </div>
       <div class="chart-card" style="max-width:1000px;padding:0;overflow:hidden;">
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr style="border-bottom:2px solid var(--dark3);">
@@ -2293,7 +2439,7 @@ const HM = (() => {
       <p>${m.gender} &nbsp;|&nbsp; ${m.date||'—'} &nbsp;|&nbsp; ${m.location||''}</p>
       <button onclick="window.print()" style="margin-bottom:1rem;padding:6px 16px;font-size:12pt;cursor:pointer;">🖨 Print</button>
       <h2>Team Scores</h2>
-      <table><thead><tr><th>#</th><th>School</th><th>Olympic</th><th>Traditional</th><th>Total</th></tr></thead><tbody>${teamRows}</tbody></table>
+      <table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th>Olympic</th><th>Traditional</th><th>Total</th></tr></thead><tbody>${teamRows}</tbody></table>
       <h2>Individual Results</h2>${wcSections}
     </body></html>`);
     win.document.close();
@@ -2349,16 +2495,148 @@ const HM = (() => {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  //  SCHEDULE INTEGRATION
+  // ══════════════════════════════════════════════════════════════════════════
+  function createFromSchedule(scheduleMeet, gender, numPlatforms) {
+    const divMap = { OLY:'olympic', Traditional:'traditional', Both:'both', Exhibition:'exhibition', '':'both' };
+    const teamName = (typeof state !== 'undefined' && state.teams?.[state.activeTeamId]?.name) || 'Home Team';
+    const homeSchool = { id: _uid('sch'), name: teamName, isHome: true };
+
+    const id = _uid('meet');
+    const newMeet = {
+      id,
+      name:         scheduleMeet.name || '',
+      date:         scheduleMeet.date || '',
+      location:     scheduleMeet.location || '',
+      gender,
+      status:       'setup',
+      useFlights:   false,
+      numPlatforms: numPlatforms || 0,
+      platformStates: {},
+      schools:      [homeSchool],
+      entries:      [],
+      _scheduleId:  scheduleMeet.id,
+    };
+
+    const rosterAthletes = (typeof state !== 'undefined') ? (state.roster?.athletes || []) : [];
+    (scheduleMeet.entries || []).forEach((entry, i) => {
+      const ath = rosterAthletes.find(a => (a.id || a.name) === entry.athleteId);
+      if (!ath) return;
+      const disc     = divMap[entry.division || ''] || 'both';
+      const wc       = ath.wc || '';
+      const platform = numPlatforms > 0 ? ((i % numPlatforms) + 1) : null;
+      const e = _blankEntry(ath.name, homeSchool.id, wc, disc, ath.id, {
+        snatch: _openAttempt(ath.snatch),
+        cj:     _openAttempt(ath.cj),
+        bench:  _openAttempt(ath.bench),
+      }, !!ath.publicOptOut);
+      if (platform !== null) e.platform = platform;
+      newMeet.entries.push(e);
+    });
+
+    _meets.push(newMeet);
+    _activeMeetId = id;
+    _view = 'setup';
+    _save();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SUB-HEADER
+  // ══════════════════════════════════════════════════════════════════════════
+  function buildSubHeaderHTML() {
+    const btn  = (label, onclick, extra='') => `<button onclick="${onclick}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;${extra}">${label}</button>`;
+    const back = (label, onclick) => `<button onclick="${onclick}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;" onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">${label}</button>`;
+    const sep  = `<div style="width:1px;height:20px;background:var(--dark3);flex-shrink:0;margin:0 4px;"></div>`;
+    const title = (t) => `<span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--white);">${t}</span>`;
+    const spacer = `<div style="flex:1;"></div>`;
+
+    if (_view === 'list') {
+      const count    = _meets.length;
+      const complete = _meets.filter(m => m.status === 'complete').length;
+      const parts    = [];
+      if (count)    parts.push(`${count} meet${count!==1?'s':''}`);
+      if (complete) parts.push(`${complete} complete`);
+      return title('Host Meet') +
+        (parts.length ? sep + `<span style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);">${parts.join(' · ')}</span>` : '') +
+        spacer + btn('📊 Stats', 'HM.showStats()');
+    }
+
+    const m = _meet();
+    if (!m) return title('Host Meet');
+
+    if (_view === 'setup') {
+      const canProceed = m.name.trim() && m.schools.length >= 2 && m.entries.length > 0;
+      return back('← Host Meet', 'HM.backToList()') + sep + title('Meet Setup') + spacer +
+        `<button onclick="HM.saveSetupAndProceed()" class="btn btn-gold" style="font-size:12px;padding:5px 14px;" ${canProceed?'':'disabled'} title="${canProceed?'Proceed to weigh-in':'Requires: meet name, 2+ schools, 1+ athlete'}">Proceed to Weigh-In →</button>`;
+    }
+
+    if (_view === 'weighin') {
+      const totalWeighed = m.entries.filter(e => e.weighIn !== null).length;
+      const allDone      = totalWeighed === m.entries.length && m.entries.length > 0;
+      return back('← Setup', 'HM.backToSetup()') + sep + title(esc(m.name)) +
+        sep + `<span id="hm-wi-counter" style="font-size:12px;color:var(--muted);">${totalWeighed} / ${m.entries.length} weighed in</span>` + spacer +
+        `<button id="hm-wi-proceed-btn" onclick="HM.proceedToCompetition()" class="btn btn-gold" style="font-size:12px;padding:5px 14px;" ${allDone?'':'disabled'}>Begin Competition →</button>`;
+    }
+
+    if (_view === 'competition') {
+      const lift        = m.status;
+      const liftLabel   = STATUS_LABEL[lift] || lift;
+      const timerRunning = _timerEndMs !== null && _timerPausedRem === null;
+      const hasTimer     = _timerEndMs !== null || _timerPausedRem !== null;
+      const timerColor   = !hasTimer ? 'var(--muted)' : 'var(--white)';
+      const phaseComplete = _phaseComplete(m, lift);
+      const timerHTML = `<div style="display:flex;align-items:center;gap:5px;">
+        <span id="hm-timer-display" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;min-width:46px;color:${timerColor};">${_fmtTimer()}</span>
+        <button onclick="HM.startTimer(300)" class="btn btn-outline" style="font-size:10px;padding:2px 6px;">5m</button>
+        <button onclick="HM.startTimer(600)" class="btn btn-outline" style="font-size:10px;padding:2px 6px;">10m</button>
+        ${hasTimer ? `<button onclick="HM.pauseResumeTimer()" class="btn btn-outline" style="font-size:10px;padding:2px 6px;">${timerRunning?'⏸':'▶'}</button>
+          <button onclick="HM.resetTimer()" class="btn btn-outline" style="font-size:10px;padding:2px 6px;color:#E07070;border-color:#E07070;">✕</button>` : ''}
+      </div>`;
+      return back('← Weigh-In', 'HM.backToWeighIn()') + sep +
+        title(esc(m.name)) +
+        `<span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:var(--gold-a15);color:var(--gold);margin-left:6px;">${liftLabel.toUpperCase()}</span>` +
+        spacer + timerHTML + sep +
+        `<button onclick="HM._toggleCompFont()" class="btn btn-outline" style="font-size:11px;padding:3px 9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;" title="Toggle font size">${_compFontLarge?'A−':'A+'}</button>` +
+        `<button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:11px;padding:3px 9px;">📺 Display</button>` +
+        (m.numPlatforms ? sep + (_platformActive
+          ? `<button onclick="HM.stopPlatforms()" class="btn btn-outline" style="font-size:11px;padding:3px 9px;border-color:#5EC08A;color:#5EC08A;">📡 Stop</button>`
+          : `<button onclick="HM.startPlatforms()" class="btn btn-gold" style="font-size:11px;padding:3px 9px;">📡 Platforms</button>`) : '') +
+        sep + `<button onclick="HM.advancePhase()" class="btn btn-gold" style="font-size:12px;padding:5px 14px;" ${phaseComplete?'':'disabled'}>
+          ${lift==='bench'?'Complete Meet ✓':'Next Phase →'}</button>`;
+    }
+
+    if (_view === 'results') {
+      return back('← Host Meet', 'HM.backToList()') + sep + title(esc(m.name) + ' — Results') + spacer +
+        `<button onclick="HM.printScoreboard()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">🖨 Print</button>` +
+        `<button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">📺 Display</button>` +
+        `<button onclick="HM.syncPRsToRoster()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">↑ Sync PRs</button>` +
+        `<button onclick="HM.exportResultsCSV()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">⬇ CSV</button>` +
+        `<button onclick="HM.exportResultsPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">⬇ PDF</button>`;
+    }
+
+    if (_view === 'stats') {
+      const completed = _meets.filter(m => m.status === 'complete');
+      return back('← Host Meet', 'HM.backToList()') + sep + title('Athlete Stats') +
+        (completed.length ? sep + `<span style="font-size:12px;color:var(--muted);">${completed.length} completed meet${completed.length!==1?'s':''}</span>` : '');
+    }
+
+    return title('Host Meet');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   //  PUBLIC API
   // ══════════════════════════════════════════════════════════════════════════
   return {
-    buildHTML,
+    buildHTML, buildSubHeaderHTML,
+    // Schedule integration
+    createFromSchedule,
     // List
     newMeet, openMeet, deleteMeet,
     // Setup
     autoSaveSetup, saveSetupAndProceed,
-    openAddSchoolModal, saveSchool, removeSchool,
+    openAddSchoolModal, saveSchool, removeSchool, setSchoolColor,
     openAddEntryModal, saveEntry, removeEntry,
+    openEditEntryModal, saveEditEntry,
     openImportRosterModal, confirmImportRoster,
     openImportCSVModal, confirmImportCSV,
     backToList, backToSetup, backToWeighIn,
@@ -2374,6 +2652,7 @@ const HM = (() => {
     _setScoreTab, _toggleCompFont,
     // Results
     syncPRsToRoster, exportResultsCSV, exportResultsPDF,
+    openEditResultModal, saveEditResult, _setAttemptResult,
     // Phase 3
     toggleFlights, setEntryFlight, _setFlight,
     setPlatformForEntry,

@@ -71,10 +71,15 @@ async function startPlatformServer(meetState) {
   }
 
   // Static files
+  expressApp.use('/vendor', express.static(path.join(__dirname, 'vendor')));
   expressApp.get('/platform/:num', (_req, res) =>
     res.sendFile(path.join(__dirname, 'platform-client.html')));
+  expressApp.get('/display/:num', (_req, res) =>
+    res.sendFile(path.join(__dirname, 'platform-display.html')));
   expressApp.get('/scoreboard', (_req, res) =>
     res.sendFile(path.join(__dirname, 'platform-scoreboard.html')));
+  expressApp.get('/referee/:num/:seat', (_req, res) =>
+    res.sendFile(path.join(__dirname, 'referee.html')));
   expressApp.get('/', (_req, res) => res.redirect('/platform/1'));
 
   // ── Socket events ──────────────────────────────────────────────────────────
@@ -101,10 +106,14 @@ async function startPlatformServer(meetState) {
     socket.on('set-bar-weight', ({ pNum, weight }) => {
       const ps = _getPS(pNum);
       ps.barWeight            = parseInt(weight) || null;
+      ps.attemptRound         = 1;
       ps.checkedIn            = [];
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;
+      ps.breakEndMs           = null;
+      ps.breakPausedRem       = null;
+      ps.judgeVotes           = { 1: null, 2: null, 3: null };
       _broadcast();
     });
 
@@ -146,6 +155,7 @@ async function startPlatformServer(meetState) {
       if (!att || att.result !== null) return;
       const ps  = _getPS(pNum);
       ps.checkedIn = ps.checkedIn.filter(k => k !== entryId + ':' + attemptIdx);
+      ps.judgeVotes = { 1: null, 2: null, 3: null };
       att.result = result;
       // Auto-populate next declared weight
       const nextIdx = attemptIdx + 1;
@@ -175,16 +185,14 @@ async function startPlatformServer(meetState) {
       _broadcast();
     });
 
-    socket.on('pass-attempt', ({ pNum, entryId, lift }) => {
+    socket.on('pass-attempt', ({ pNum, entryId, lift, weight }) => {
       const m   = _platformMeetState;
       const e   = m.entries.find(x => x.id === entryId);
       if (!e) return;
       const ps  = _getPS(pNum);
       const idx = _curIdx(e, lift);
       if (idx < 0) return;
-      for (let i = idx; i < 3; i++) {
-        if (e[lift][i].result === null) e[lift][i].result = 'miss';
-      }
+      if (weight) e[lift][idx].declared = parseInt(weight);
       ps.checkedIn = ps.checkedIn.filter(k => !k.startsWith(entryId + ':'));
       if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
       _broadcast();
@@ -206,7 +214,6 @@ async function startPlatformServer(meetState) {
       if (ps.attemptRound < 3) {
         ps.attemptRound++;
         ps.checkedIn            = [];
-        ps.barWeight            = null;
         ps.clockStart           = null;
         ps.clockDuration        = null;
         ps.clockPausedRemaining = null;
@@ -214,7 +221,7 @@ async function startPlatformServer(meetState) {
       _broadcast();
     });
 
-    socket.on('advance-phase', ({ pNum }) => {
+    socket.on('advance-phase', ({ pNum, breakDuration }) => {
       const m       = _platformMeetState;
       const ps      = _getPS(pNum);
       const lift    = ps.status;
@@ -238,6 +245,31 @@ async function startPlatformServer(meetState) {
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;
+      ps.breakEndMs           = (breakDuration > 0) ? Date.now() + breakDuration * 1000 : null;
+      ps.breakPausedRem       = null;
+      _broadcast();
+    });
+
+    socket.on('pause-break', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      if (!ps.breakEndMs) return;
+      ps.breakPausedRem = Math.max(0, ps.breakEndMs - Date.now());
+      ps.breakEndMs     = null;
+      _broadcast();
+    });
+
+    socket.on('resume-break', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      if (ps.breakPausedRem == null) return;
+      ps.breakEndMs     = Date.now() + ps.breakPausedRem;
+      ps.breakPausedRem = null;
+      _broadcast();
+    });
+
+    socket.on('reset-break', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      ps.breakEndMs   = null;
+      ps.breakPausedRem = null;
       _broadcast();
     });
 
@@ -262,6 +294,53 @@ async function startPlatformServer(meetState) {
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;
+      _broadcast();
+    });
+
+    socket.on('judge-vote', ({ pNum, seat, result }) => {
+      const ps   = _getPS(pNum);
+      const s    = parseInt(seat);
+      if (s < 1 || s > 3 || (result !== 'good' && result !== 'no')) return;
+      if (!ps.judgeVotes) ps.judgeVotes = { 1: null, 2: null, 3: null };
+      ps.judgeVotes[s] = result;
+      // Auto-record when majority reached (2 of 3 agree)
+      const votes  = Object.values(ps.judgeVotes).filter(v => v !== null);
+      const goods  = votes.filter(v => v === 'good').length;
+      const nos    = votes.filter(v => v === 'no').length;
+      if (goods >= 2 || nos >= 2) {
+        const autoResult = goods >= 2 ? 'good' : 'miss';
+        // Find the currently checked-in entry for this platform
+        const checkedInKey = ps.checkedIn?.[0];
+        if (checkedInKey) {
+          const [entryId, attemptIdxStr] = checkedInKey.split(':');
+          const attemptIdx = parseInt(attemptIdxStr);
+          const lift = ps.status;
+          const m    = _platformMeetState;
+          const e    = m.entries.find(x => x.id === entryId);
+          if (e) {
+            const att = e[lift]?.[attemptIdx];
+            if (att && att.result === null) {
+              att.result = autoResult;
+              ps.checkedIn = ps.checkedIn.filter(k => k !== checkedInKey);
+              if (autoResult === 'good' && attemptIdx + 1 < 3 && e[lift][attemptIdx+1].result === null) {
+                e[lift][attemptIdx+1].declared = att.declared + 5;
+              }
+              m.lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc,
+                             lift, declared: att.declared, result: autoResult, attemptIdx, platform: pNum,
+                             publicOptOut: !!e.publicOptOut };
+              if (ps.checkedIn.length > 0) {
+                const nextId = ps.checkedIn[0].split(':')[0];
+                ps.clockDuration        = nextId === entryId ? 120 : 60;
+                ps.clockStart           = Date.now();
+                ps.clockPausedRemaining = null;
+              } else {
+                ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null;
+              }
+            }
+          }
+        }
+        ps.judgeVotes = { 1: null, 2: null, 3: null };
+      }
       _broadcast();
     });
   });
@@ -327,24 +406,36 @@ app.whenReady().then(() => {
   ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
   ipcMain.handle('get-version',        () => app.getVersion());
 
-  ipcMain.handle('export-pdf', async (_event, html) => {
-    const { dialog } = require('electron');
+  ipcMain.handle('export-pdf', async (event, html) => {
+    const { dialog, BrowserWindow: BW } = require('electron');
     const fs = require('fs');
-    const { filePath, canceled } = await dialog.showSaveDialog({
+    const senderWin = BW.fromWebContents(event.sender) || mainWindow;
+    const { filePath, canceled } = await dialog.showSaveDialog(senderWin, {
       title: 'Save Results PDF',
       defaultPath: 'LiftBuilder_Results.pdf',
       filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
     });
     if (canceled || !filePath) return { success: false };
-    const tmp = path.join(os.tmpdir(), '_lb_pdf_tmp.html');
-    fs.writeFileSync(tmp, html, 'utf8');
-    const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
-    await win.loadFile(tmp);
-    const pdfBuf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'Letter' });
-    win.destroy();
-    fs.unlinkSync(tmp);
-    fs.writeFileSync(filePath, pdfBuf);
-    return { success: true };
+    try {
+      const tmp = path.join(os.tmpdir(), '_lb_pdf_tmp.html');
+      fs.writeFileSync(tmp, html, 'utf8');
+      const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+      await new Promise((resolve, reject) => {
+        win.webContents.once('did-finish-load', resolve);
+        win.webContents.once('did-fail-load', (_e, code, desc) => reject(new Error(`Load failed: ${desc}`)));
+        win.loadFile(tmp);
+      });
+      // Give the renderer a tick to paint before capturing
+      await new Promise(r => setTimeout(r, 300));
+      const pdfBuf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'Letter' });
+      win.destroy();
+      fs.unlinkSync(tmp);
+      fs.writeFileSync(filePath, pdfBuf);
+      return { success: true };
+    } catch (err) {
+      console.error('[export-pdf]', err);
+      return { success: false, error: err.message };
+    }
   });
 
   ipcMain.handle('open-display-window', () => {
@@ -393,6 +484,7 @@ app.whenReady().then(() => {
     if (!_platformMeetState) return;
     const ps = _getPS(pNum);
     ps.barWeight            = parseInt(weight) || null;
+    ps.attemptRound         = 1;
     ps.checkedIn            = [];
     ps.clockStart           = null;
     ps.clockDuration        = null;
@@ -406,7 +498,6 @@ app.whenReady().then(() => {
     if (ps.attemptRound < 3) {
       ps.attemptRound++;
       ps.checkedIn            = [];
-      ps.barWeight            = null;
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;

@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "5.0.3",
+  "version": "5.1.2",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
@@ -23,7 +23,9 @@
       "host-meet.js",
       "host-meet-display.html",
       "platform-client.html",
+      "platform-display.html",
       "platform-scoreboard.html",
+      "referee.html",
       "main.js",
       "preload.js",
       "vendor/**"
