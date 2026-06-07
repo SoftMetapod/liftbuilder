@@ -1,7 +1,8 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
-const path = require('path');
-const http = require('http');
-const os   = require('os');
+const path   = require('path');
+const http   = require('http');
+const os     = require('os');
+const crypto = require('crypto');
 
 let mainWindow   = null;
 let _autoUpdater = null;
@@ -10,6 +11,7 @@ let _autoUpdater = null;
 let _httpServer        = null;
 let _io                = null;
 let _platformMeetState = null;
+let _sessionToken      = null; // random token required by all socket clients
 const PLATFORM_PORT    = 3847;
 const _socketPlatforms   = new Map(); // socket.id → pNum
 const _connectedPlatforms = new Set(); // currently connected pNums
@@ -32,7 +34,14 @@ function _eligibleForLift(e, lift) {
 }
 function _curIdx(e, lift) { return e[lift].findIndex(a => a.result === null); }
 
+function _validPNum(pNum) {
+  const max = _platformMeetState?.numPlatforms || 8;
+  return Number.isInteger(pNum) && pNum >= 1 && pNum <= max;
+}
+
 function _getPS(pNum) {
+  if (!_platformMeetState) return null;
+  if (!_validPNum(pNum)) return null;
   if (!_platformMeetState.platformStates) _platformMeetState.platformStates = {};
   if (!_platformMeetState.platformStates[pNum]) {
     _platformMeetState.platformStates[pNum] = {
@@ -40,6 +49,20 @@ function _getPS(pNum) {
     };
   }
   return _platformMeetState.platformStates[pNum];
+}
+
+// Strip script/event-handler injection from HTML before writing to disk for PDF rendering.
+function _stripDangerousHtml(html) {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe\s*>/gi, '')
+    .replace(/(<[^>]+)\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '$1')
+    .replace(/javascript\s*:/gi, 'removed:');
+}
+
+// Only accept IPC from the main window (loaded from file://).
+function _isMainWindow(event) {
+  return mainWindow !== null && event.sender === mainWindow.webContents;
 }
 
 function _broadcast() {
@@ -55,7 +78,21 @@ async function startPlatformServer(meetState) {
   const { Server }   = require('socket.io');
   const expressApp   = express();
   _httpServer        = http.createServer(expressApp);
-  _io                = new Server(_httpServer, { cors: { origin: '*' } });
+  _sessionToken      = crypto.randomBytes(24).toString('hex');
+
+  const localIP      = getLocalIP();
+  const allowedOrigins = [
+    `http://127.0.0.1:${PLATFORM_PORT}`,
+    `http://localhost:${PLATFORM_PORT}`,
+    `http://${localIP}:${PLATFORM_PORT}`,
+  ];
+  _io = new Server(_httpServer, { cors: { origin: allowedOrigins, methods: ['GET', 'POST'] } });
+
+  // Reject any socket that does not present the session token.
+  _io.use((socket, next) => {
+    if (socket.handshake.auth?.token === _sessionToken) return next();
+    next(new Error('Unauthorized'));
+  });
   _platformMeetState = JSON.parse(JSON.stringify(meetState));
   _platformMeetState.timerEndMs    = null;
   _platformMeetState.timerPausedRem = null;
@@ -86,6 +123,7 @@ async function startPlatformServer(meetState) {
   _io.on('connection', (socket) => {
     socket.on('join', (rawNum) => {
       const pNum = parseInt(rawNum);
+      if (!_validPNum(pNum)) return;
       _socketPlatforms.set(socket.id, pNum);
       _connectedPlatforms.add(pNum);
       socket.join('p' + pNum);
@@ -104,7 +142,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('set-bar-weight', ({ pNum, weight }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       ps.barWeight            = parseInt(weight) || null;
       ps.attemptRound         = 1;
       ps.checkedIn            = [];
@@ -118,7 +157,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('check-in', ({ pNum, entryId, attemptIdx }) => {
-      const ps       = _getPS(pNum);
+      const ps       = _getPS(parseInt(pNum));
+      if (!ps) return;
       const key      = entryId + ':' + attemptIdx;
       const wasEmpty = ps.checkedIn.length === 0;
       if (!ps.checkedIn.includes(key)) ps.checkedIn.push(key);
@@ -140,7 +180,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('uncheck-in', ({ pNum, entryId, attemptIdx }) => {
-      const ps  = _getPS(pNum);
+      const ps  = _getPS(parseInt(pNum));
+      if (!ps) return;
       const key = entryId + ':' + attemptIdx;
       ps.checkedIn = ps.checkedIn.filter(k => k !== key);
       if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
@@ -148,12 +189,13 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('record-result', ({ pNum, entryId, lift, attemptIdx, result }) => {
+      const ps  = _getPS(parseInt(pNum));
+      if (!ps) return;
       const m   = _platformMeetState;
       const e   = m.entries.find(x => x.id === entryId);
       if (!e) return;
-      const att = e[lift][attemptIdx];
+      const att = e[lift]?.[attemptIdx];
       if (!att || att.result !== null) return;
-      const ps  = _getPS(pNum);
       ps.checkedIn = ps.checkedIn.filter(k => k !== entryId + ':' + attemptIdx);
       ps.judgeVotes = { 1: null, 2: null, 3: null };
       att.result = result;
@@ -186,10 +228,11 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('pass-attempt', ({ pNum, entryId, lift, weight }) => {
+      const ps  = _getPS(parseInt(pNum));
+      if (!ps) return;
       const m   = _platformMeetState;
       const e   = m.entries.find(x => x.id === entryId);
       if (!e) return;
-      const ps  = _getPS(pNum);
       const idx = _curIdx(e, lift);
       if (idx < 0) return;
       if (weight) e[lift][idx].declared = parseInt(weight);
@@ -199,18 +242,20 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('scratch-entry', ({ pNum, entryId, lift }) => {
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       const m  = _platformMeetState;
       const e  = m.entries.find(x => x.id === entryId);
       if (!e) return;
       e[lift].forEach(a => { if (a.result === null) a.result = 'miss'; });
-      const ps = _getPS(pNum);
       ps.checkedIn = ps.checkedIn.filter(k => !k.startsWith(entryId + ':'));
       if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
       _broadcast();
     });
 
     socket.on('advance-attempt-round', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       if (ps.attemptRound < 3) {
         ps.attemptRound++;
         ps.checkedIn            = [];
@@ -223,7 +268,8 @@ async function startPlatformServer(meetState) {
 
     socket.on('advance-phase', ({ pNum, breakDuration }) => {
       const m       = _platformMeetState;
-      const ps      = _getPS(pNum);
+      const ps      = _getPS(parseInt(pNum));
+      if (!ps) return;
       const lift    = ps.status;
       const entries = m.entries.filter(e => e.platform === pNum);
       const elig    = entries.filter(e => _eligibleForLift(e, lift));
@@ -245,13 +291,15 @@ async function startPlatformServer(meetState) {
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;
-      ps.breakEndMs           = (breakDuration > 0) ? Date.now() + breakDuration * 1000 : null;
+      const safeDuration      = Math.max(0, Math.min(Number(breakDuration) || 0, 3600));
+      ps.breakEndMs           = safeDuration > 0 ? Date.now() + safeDuration * 1000 : null;
       ps.breakPausedRem       = null;
       _broadcast();
     });
 
     socket.on('pause-break', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       if (!ps.breakEndMs) return;
       ps.breakPausedRem = Math.max(0, ps.breakEndMs - Date.now());
       ps.breakEndMs     = null;
@@ -259,7 +307,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('resume-break', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       if (ps.breakPausedRem == null) return;
       ps.breakEndMs     = Date.now() + ps.breakPausedRem;
       ps.breakPausedRem = null;
@@ -267,14 +316,16 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('reset-break', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       ps.breakEndMs   = null;
       ps.breakPausedRem = null;
       _broadcast();
     });
 
     socket.on('pause-clock', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       if (!ps.clockStart || !ps.clockDuration) return;
       ps.clockPausedRemaining = Math.max(0, ps.clockDuration * 1000 - (Date.now() - ps.clockStart));
       ps.clockStart           = null;
@@ -282,7 +333,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('resume-clock', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       if (ps.clockPausedRemaining == null) return;
       ps.clockStart           = Date.now() - (ps.clockDuration * 1000 - ps.clockPausedRemaining);
       ps.clockPausedRemaining = null;
@@ -290,7 +342,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('reset-clock', ({ pNum }) => {
-      const ps = _getPS(pNum);
+      const ps = _getPS(parseInt(pNum));
+      if (!ps) return;
       ps.clockStart           = null;
       ps.clockDuration        = null;
       ps.clockPausedRemaining = null;
@@ -298,7 +351,8 @@ async function startPlatformServer(meetState) {
     });
 
     socket.on('judge-vote', ({ pNum, seat, result }) => {
-      const ps   = _getPS(pNum);
+      const ps   = _getPS(parseInt(pNum));
+      if (!ps) return;
       const s    = parseInt(seat);
       if (s < 1 || s > 3 || (result !== 'good' && result !== 'no')) return;
       if (!ps.judgeVotes) ps.judgeVotes = { 1: null, 2: null, 3: null };
@@ -348,7 +402,7 @@ async function startPlatformServer(meetState) {
   return new Promise((resolve, reject) => {
     _httpServer.listen(PLATFORM_PORT, (err) => {
       if (err) return reject(err);
-      resolve({ port: PLATFORM_PORT, ip: getLocalIP() });
+      resolve({ port: PLATFORM_PORT, ip: getLocalIP(), token: _sessionToken });
     });
   });
 }
@@ -359,6 +413,7 @@ function stopPlatformServer() {
   _httpServer?.close();
   _httpServer = null;
   _platformMeetState = null;
+  _sessionToken = null;
   _socketPlatforms.clear();
   _connectedPlatforms.clear();
 }
@@ -368,6 +423,8 @@ function getUpdater() {
   if (!_autoUpdater) {
     const { autoUpdater } = require('electron-updater');
     autoUpdater.autoDownload = false;
+    // SECURITY TODO: Set to true once builds are code-signed (Apple Developer ID for Mac,
+    // EV certificate for Windows). Leaving false allows unsigned updates — supply-chain risk.
     autoUpdater.verifyUpdateCodeSignature = false;
     autoUpdater.on('update-available',     (info) => mainWindow?.webContents.send('update-available', info.version));
     autoUpdater.on('update-not-available', ()     => mainWindow?.webContents.send('update-not-available'));
@@ -389,12 +446,18 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
   mainWindow.loadFile('index.html');
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(url);
+      }
+    } catch { /* invalid URL — deny silently */ }
     return { action: 'deny' };
   });
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -407,6 +470,7 @@ app.whenReady().then(() => {
   ipcMain.handle('get-version',        () => app.getVersion());
 
   ipcMain.handle('export-pdf', async (event, html) => {
+    if (!_isMainWindow(event)) return { success: false };
     const { dialog, BrowserWindow: BW } = require('electron');
     const fs = require('fs');
     const senderWin = BW.fromWebContents(event.sender) || mainWindow;
@@ -418,8 +482,8 @@ app.whenReady().then(() => {
     if (canceled || !filePath) return { success: false };
     try {
       const tmp = path.join(os.tmpdir(), '_lb_pdf_tmp.html');
-      fs.writeFileSync(tmp, html, 'utf8');
-      const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+      fs.writeFileSync(tmp, _stripDangerousHtml(String(html)), 'utf8');
+      const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
       await new Promise((resolve, reject) => {
         win.webContents.once('did-finish-load', resolve);
         win.webContents.once('did-fail-load', (_e, code, desc) => reject(new Error(`Load failed: ${desc}`)));
@@ -438,18 +502,20 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('open-display-window', () => {
+  ipcMain.handle('open-display-window', (event) => {
+    if (!_isMainWindow(event)) return;
     const display = new BrowserWindow({
       width: 1280, height: 720,
       title: 'LiftBuilder — Live Display',
       backgroundColor: '#0E0E0E',
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
     });
     display.loadFile('host-meet-display.html');
   });
 
   // ── Platform server IPC ────────────────────────────────────────────────────
-  ipcMain.handle('start-platform-server', async (_e, meetState) => {
+  ipcMain.handle('start-platform-server', async (event, meetState) => {
+    if (!_isMainWindow(event)) return { success: false };
     try {
       const info = await startPlatformServer(meetState);
       return { success: true, ...info };
@@ -458,7 +524,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('stop-platform-server', () => {
+  ipcMain.handle('stop-platform-server', (event) => {
+    if (!_isMainWindow(event)) return { success: false };
     stopPlatformServer();
     return { success: true };
   });
@@ -468,7 +535,8 @@ app.whenReady().then(() => {
     return { port: PLATFORM_PORT, ip: getLocalIP() };
   });
 
-  ipcMain.handle('sync-platform-state', (_e, meetState) => {
+  ipcMain.handle('sync-platform-state', (event, meetState) => {
+    if (!_isMainWindow(event)) return { success: false };
     if (_platformMeetState && _platformMeetState.id === meetState.id) {
       // Merge: keep platformStates from server (runtime), take entries from renderer (results)
       const savedPS = _platformMeetState.platformStates;
@@ -481,8 +549,8 @@ app.whenReady().then(() => {
 
   // ── Director override IPC ──────────────────────────────────────────────────
   ipcMain.handle('director-set-bar-weight', (_e, { pNum, weight }) => {
-    if (!_platformMeetState) return;
-    const ps = _getPS(pNum);
+    const ps = _getPS(parseInt(pNum));
+    if (!ps) return;
     ps.barWeight            = parseInt(weight) || null;
     ps.attemptRound         = 1;
     ps.checkedIn            = [];
@@ -493,8 +561,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-advance-round', (_e, { pNum }) => {
-    if (!_platformMeetState) return;
-    const ps = _getPS(pNum);
+    const ps = _getPS(parseInt(pNum));
+    if (!ps) return;
     if (ps.attemptRound < 3) {
       ps.attemptRound++;
       ps.checkedIn            = [];
@@ -506,8 +574,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-pause-clock', (_e, { pNum }) => {
-    if (!_platformMeetState) return;
-    const ps = _getPS(pNum);
+    const ps = _getPS(parseInt(pNum));
+    if (!ps) return;
     if (!ps.clockStart || !ps.clockDuration) return;
     ps.clockPausedRemaining = Math.max(0, ps.clockDuration * 1000 - (Date.now() - ps.clockStart));
     ps.clockStart           = null;
@@ -515,8 +583,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-resume-clock', (_e, { pNum }) => {
-    if (!_platformMeetState) return;
-    const ps = _getPS(pNum);
+    const ps = _getPS(parseInt(pNum));
+    if (!ps) return;
     if (ps.clockPausedRemaining == null) return;
     ps.clockStart           = Date.now() - (ps.clockDuration * 1000 - ps.clockPausedRemaining);
     ps.clockPausedRemaining = null;
@@ -524,8 +592,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-reset-clock', (_e, { pNum }) => {
-    if (!_platformMeetState) return;
-    const ps = _getPS(pNum);
+    const ps = _getPS(parseInt(pNum));
+    if (!ps) return;
     ps.clockStart           = null;
     ps.clockDuration        = null;
     ps.clockPausedRemaining = null;
@@ -533,7 +601,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-timer-sync', (_e, { timerEndMs, timerPausedRem }) => {
-    if (!_platformMeetState) return;
+    if (!_platformMeetState || !_io) return;
     _platformMeetState.timerEndMs    = timerEndMs;
     _platformMeetState.timerPausedRem = timerPausedRem;
     _broadcast();
@@ -548,9 +616,9 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('director-advance-phase', (_e, { pNum }) => {
-    if (!_platformMeetState) return;
     const m       = _platformMeetState;
-    const ps      = _getPS(pNum);
+    const ps      = _getPS(parseInt(pNum));
+    if (!ps) return;
     const lift    = ps.status;
     const entries = m.entries.filter(e => e.platform === pNum);
     const elig    = entries.filter(e => _eligibleForLift(e, lift));

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; connect-src 'self' ws: wss:;">
 <title>LiftBuilder — Live Scoreboard</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -96,7 +97,8 @@ body{background:var(--dark);color:var(--white);font-family:Arial,sans-serif;min-
 <script>
 'use strict';
 
-const socket = io();
+const _meetToken = new URLSearchParams(location.search).get('token') || '';
+const socket     = io({ auth: { token: _meetToken } });
 let _meet = null;
 
 const STATUS_LABEL = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench', complete:'Complete' };

@@ -35,7 +35,7 @@ const HM = (() => {
   let _compFontLarge      = false;
   let _lastLift           = null;  // last recorded result, shown on display while waiting
   let _platformActive       = false; // true when platform server is running
-  let _platformInfo         = null;  // { ip, port }
+  let _platformInfo         = null;  // { ip, port, token }
   let _platformSyncLock     = false; // prevents circular sync loops
   let _connectedPlatforms   = [];    // pNums currently connected, from server broadcasts
   let _clockStart           = null;  // ms timestamp when clock started (single-platform mode)
@@ -777,6 +777,7 @@ const HM = (() => {
       <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none" onload="HM._onCompMounted()">
       ${_platformActive && _platformInfo ? (() => {
         const base = `http://${_platformInfo.ip}:${_platformInfo.port}`;
+        const tok  = _platformInfo.token ? `?token=${encodeURIComponent(_platformInfo.token)}` : '';
         const allComplete = Array.from({length: m.numPlatforms}, (_, i) => i + 1)
           .every(n => (m.platformStates?.[n]?.status || m.status) === 'complete');
 
@@ -824,15 +825,15 @@ const HM = (() => {
                 <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:var(--gold);">PLATFORM ${pNum}</span>
                 <div style="display:flex;align-items:center;gap:8px;">
                   ${connDot}
-                  <button onclick="window.open('${base}/platform/${pNum}')"
+                  <button onclick="window.open('${base}/platform/${pNum}${tok}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 7px;border:1px solid var(--gold-a50);border-radius:3px;">Open ↗</button>
-                  <button onclick="window.open('${base}/display/${pNum}')"
+                  <button onclick="window.open('${base}/display/${pNum}${tok}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#5EC08A;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(94,192,138,.4);border-radius:3px;">📺 Display ↗</button>
-                  <button onclick="window.open('${base}/referee/${pNum}/1')"
+                  <button onclick="window.open('${base}/referee/${pNum}/1${tok}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J1</button>
-                  <button onclick="window.open('${base}/referee/${pNum}/2')"
+                  <button onclick="window.open('${base}/referee/${pNum}/2${tok}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J2</button>
-                  <button onclick="window.open('${base}/referee/${pNum}/3')"
+                  <button onclick="window.open('${base}/referee/${pNum}/3${tok}')"
                     style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J3</button>
                 </div>
               </div>
@@ -933,7 +934,7 @@ const HM = (() => {
                 <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#5EC08A;">📡 PLATFORMS ACTIVE</span>
                 <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/platform/<em>N</em></code>
                 <span style="font-size:11px;color:var(--muted);">${_connectedPlatforms.length} of ${m.numPlatforms} connected</span>
-                <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:1px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
+                <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard${tok}')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:1px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
               </div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap;">
                 <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#A07FD4;">⚖ JUDGES</span>
@@ -2126,12 +2127,12 @@ const HM = (() => {
 
     // ── Team score tables ──────────────────────────────────────────────────
     function teamTableHTML(title, sorted, key) {
-      const rows = sorted.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;font-weight:700;">${s[key]}</td></tr>`).join('');
+      const rows = sorted.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${esc(s.name)}</td><td style="text-align:right;font-weight:700;">${s[key]}</td></tr>`).join('');
       return `<h3>${title}</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     const oTeam = [...teamData].sort((a,b)=>b.olympic-a.olympic);
     const tTeam = [...teamData].sort((a,b)=>b.traditional-a.traditional);
-    const combinedRows = teamData.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${s.name}</td><td style="text-align:right;">${s.olympic} + ${s.traditional}</td><td style="text-align:right;font-weight:700;font-size:12pt;">${s.total}</td></tr>`).join('');
+    const combinedRows = teamData.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${esc(s.name)}</td><td style="text-align:right;">${s.olympic} + ${s.traditional}</td><td style="text-align:right;font-weight:700;font-size:12pt;">${s.total}</td></tr>`).join('');
     const teamHTML = teamTableHTML('Olympic Team Scores', oTeam, 'olympic')
       + teamTableHTML('Traditional Team Scores', tTeam, 'traditional')
       + `<h3>Combined Total</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Oly + Trad</th><th style="text-align:right;">Total</th></tr></thead><tbody>${combinedRows}</tbody></table>`;
@@ -2155,8 +2156,8 @@ const HM = (() => {
           const best1 = _bestMade(lift1), best2 = _bestMade(lift2);
           return `<tr>
             <td style="text-align:center;font-size:${placeNum&&placeNum<=3?'13pt':'10pt'};">${placeNum?(medal(placeNum)):'—'}</td>
-            <td>${r.e.name}</td>
-            <td style="color:#555;">${sch?.name||''}</td>
+            <td>${esc(r.e.name)}</td>
+            <td style="color:#555;">${esc(sch?.name||'')}</td>
             ${attCell(lift1[0])}${attCell(lift1[1])}${attCell(lift1[2])}
             <td style="text-align:right;font-weight:700;">${best1||'—'}</td>
             ${attCell(lift2[0])}${attCell(lift2[1])}${attCell(lift2[2])}
@@ -2194,10 +2195,10 @@ const HM = (() => {
       td{padding:4px 6px;border-bottom:1px solid #eee;}
       @media print{body{padding:12px}h2{page-break-before:auto}}`;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${m.name||'Meet'} — Results</title><style>${css}</style></head>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(m.name||'Meet')} — Results</title><style>${css}</style></head>
       <body>
-        <h1>${m.name||'Meet Results'}</h1>
-        <div class="meta">${m.gender} &nbsp;|&nbsp; ${m.date||'—'} &nbsp;|&nbsp; ${m.location||''}</div>
+        <h1>${esc(m.name||'Meet Results')}</h1>
+        <div class="meta">${esc(m.gender||'')} &nbsp;|&nbsp; ${esc(m.date||'—')} &nbsp;|&nbsp; ${esc(m.location||'')}</div>
         <h2>Team Scores</h2>${teamHTML}
         ${indivHTML}
       </body></html>`;
@@ -2256,7 +2257,7 @@ const HM = (() => {
     const result = await window.liftbuilderApp.startPlatformServer(m);
     if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
     _platformActive = true;
-    _platformInfo   = { ip: result.ip, port: result.port };
+    _platformInfo   = { ip: result.ip, port: result.port, token: result.token || '' };
     // Listen for state updates from the server
     window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
     // Push current timer state to the server immediately
