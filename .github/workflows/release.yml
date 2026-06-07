@@ -8,8 +8,11 @@ permissions:
   contents: write
 
 jobs:
-  release-mac:
-    runs-on: macos-latest
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
+      skip: ${{ steps.guard.outputs.skip }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,66 +28,63 @@ jobs:
         run: |
           if gh release view "v${{ steps.pkg.outputs.version }}" --repo ${{ github.repository }} > /dev/null 2>&1; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Version v${{ steps.pkg.outputs.version }} already released — skipping build."
+            echo "Version v${{ steps.pkg.outputs.version }} already released — skipping."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
             echo "Building v${{ steps.pkg.outputs.version }}..."
           fi
 
-      - uses: actions/setup-node@v4
+      - name: Create and push git tag
         if: steps.guard.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.pkg.outputs.version }}"
+          git push origin "v${{ steps.pkg.outputs.version }}"
+
+  release-mac:
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.tag.outputs.version }}
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
-        if: steps.guard.outputs.skip == 'false'
         run: npm ci
 
       - name: Build and publish to GitHub Releases
-        if: steps.guard.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm run publish:mac
 
   release-win:
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Read version from package.json
-        id: pkg
-        shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Skip if this version is already released
-        id: guard
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view "v${{ steps.pkg.outputs.version }}" --repo ${{ github.repository }} > /dev/null 2>&1; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Version v${{ steps.pkg.outputs.version }} already released — skipping build."
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Building v${{ steps.pkg.outputs.version }}..."
-          fi
+        with:
+          ref: v${{ needs.tag.outputs.version }}
 
       - uses: actions/setup-node@v4
-        if: steps.guard.outputs.skip == 'false'
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
-        if: steps.guard.outputs.skip == 'false'
         run: npm ci
 
       - name: Build and publish to GitHub Releases
-        if: steps.guard.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WIN_CSC_LINK: ''
