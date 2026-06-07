@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  release-mac:
     runs-on: macos-latest
 
     steps:
@@ -47,3 +47,45 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm run publish:mac
+
+  release-win:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: pkg
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Skip if this version is already released
+        id: guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.pkg.outputs.version }}" --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Version v${{ steps.pkg.outputs.version }} already released — skipping build."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Building v${{ steps.pkg.outputs.version }}..."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip == 'false'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.guard.outputs.skip == 'false'
+        run: npm ci
+
+      - name: Build and publish to GitHub Releases
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ''
+        run: npm run publish:win
