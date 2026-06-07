@@ -504,10 +504,11 @@ function renderHeader() {
   // Sub-tabs (Volume / Peaking) — only for program-related tabs
   const nav = document.getElementById('header-nav');
   if (nav) {
-    nav.innerHTML = isProg ? `
-      <button class="header-nav-btn ${tab==='volume'?'active':''}" onclick="switchTab('volume')">📊 Volume</button>
-      <button class="header-nav-btn ${tab==='peaking'?'active':''}" onclick="switchTab('peaking')">🏆 Peaking</button>
-      <button class="header-nav-btn ${tab==='calendar'?'active':''}" onclick="switchTab('calendar')">📅 Calendar</button>` : '';
+    nav.innerHTML = isProg ? [
+      _toolsVisible['volume']!==false   ? `<button class="header-nav-btn ${tab==='volume'?'active':''}" onclick="switchTab('volume')">📊 Volume</button>`   : '',
+      _toolsVisible['peaking']!==false  ? `<button class="header-nav-btn ${tab==='peaking'?'active':''}" onclick="switchTab('peaking')">🏆 Peaking</button>`  : '',
+      _toolsVisible['calendar']!==false ? `<button class="header-nav-btn ${tab==='calendar'?'active':''}" onclick="switchTab('calendar')">📅 Calendar</button>` : '',
+    ].join('') : '';
   }
 
   // Right-side actions — fully tab-specific
@@ -742,6 +743,7 @@ let _calView = 'month';   // 'month' | 'week' | 'overview'
 let _calNavYear  = null;  // initialized on first render
 let _calNavMonth = null;  // 0-11
 let _calNavWeek  = 1;     // program week number shown in week view
+let _toolsVisible = {};         // per-tool sidebar/header visibility, persisted in localStorage
 let _volActiveCats = [];        // ordered category list for the current week (for index mapping)
 let _copiedExercise = null;     // clipboard for copy/paste exercise
 let _dragDay = null, _dragSection = null, _dragIdx = null; // drag-and-drop state
@@ -809,22 +811,17 @@ function renderSidebar() {
     </div>
     <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
     <div class="sidebar-section-label" style="padding-top:.5rem;">Tools</div>
-    <div class="nav-item ${state.activeTab==='roster'?'active':''}" onclick="switchTab('roster')"><span>👥</span> Roster</div>
-    <div class="nav-item ${state.activeTab==='meets'?'active':''}" onclick="switchTab('meets')"><span>🗓</span> Schedule</div>
-    <div class="nav-item ${state.activeTab==='calculator'?'active':''}" onclick="switchTab('calculator')"><span>⚖️</span> Calculator</div>
-    <div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>
-    <div class="nav-item ${state.activeTab==='library'?'active':''}" onclick="switchTab('library')"><span>📚</span> Exercise Library</div>
+    ${_toolsVisible['roster']!==false?`<div class="nav-item ${state.activeTab==='roster'?'active':''}" onclick="switchTab('roster')"><span>👥</span> Roster</div>`:''}
+    ${_toolsVisible['meets']!==false?`<div class="nav-item ${state.activeTab==='meets'?'active':''}" onclick="switchTab('meets')"><span>🗓</span> Schedule</div>`:''}
+    ${_toolsVisible['calculator']!==false?`<div class="nav-item ${state.activeTab==='calculator'?'active':''}" onclick="switchTab('calculator')"><span>⚖️</span> Calculator</div>`:''}
+    ${_toolsVisible['templates']!==false?`<div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>`:''}
+    ${_toolsVisible['library']!==false?`<div class="nav-item ${state.activeTab==='library'?'active':''}" onclick="switchTab('library')"><span>📚</span> Exercise Library</div>`:''}
     <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
-    <div class="nav-item ${state.activeTab==='hostmeet'?'active':''}" onclick="switchTab('hostmeet')"><span>🏆</span> Host Meet</div>
+    ${_toolsVisible['hostmeet']!==false?`<div class="nav-item ${state.activeTab==='hostmeet'?'active':''}" onclick="switchTab('hostmeet')"><span>🏆</span> Host Meet</div>`:''}
     <div style="flex:1;"></div>
-    <div style="padding:.75rem 1.25rem;border-top:1px solid var(--dark3);display:flex;flex-direction:column;gap:5px;">
-      <div style="display:flex;gap:5px;">
-        <button id="undo-btn" onclick="undo()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;opacity:0.3;pointer-events:none;" title="Undo last action (Ctrl+Z)">⟲ Undo</button>
-        <button onclick="exportDataJSON()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;" title="Export ALL teams as JSON backup">⬇ Full Backup</button>
-        <button onclick="exportTeamJSON()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;" title="Export active team only">⬇ Team</button>
-        <button onclick="importDataJSON()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;" title="Restore from JSON backup">⬆ Restore</button>
-      </div>
-      <button onclick="clearAllData()" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;width:100%;text-align:center;padding:3px;">Clear all data</button>
+    <div style="padding:.75rem 1.25rem;border-top:1px solid var(--dark3);display:flex;gap:5px;">
+      <button id="undo-btn" onclick="undo()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;opacity:0.3;pointer-events:none;" title="Undo last action (Ctrl+Z)">⟲ Undo</button>
+      <button onclick="openSettings()" style="flex:1;background:var(--dark2);border:1px solid var(--dark3);cursor:pointer;color:var(--muted);font-size:10px;border-radius:3px;padding:4px;" title="Settings">⚙ Settings</button>
     </div>`;
 }
 
@@ -5527,6 +5524,81 @@ function saveDuplicateWeek() {
   render();
 }
 
+// ── Tool Visibility / Settings ──
+const TOOLS_VISIBLE_KEY = 'liftbuilder_tools_visible';
+const TOOL_DEFS = [
+  { key:'volume',     label:'Volume',          icon:'📊' },
+  { key:'peaking',    label:'Peaking',         icon:'🏆' },
+  { key:'calendar',   label:'Calendar',        icon:'📅' },
+  { key:'roster',     label:'Roster',          icon:'👥' },
+  { key:'meets',      label:'Schedule',        icon:'🗓' },
+  { key:'calculator', label:'Calculator',      icon:'⚖️' },
+  { key:'templates',  label:'Templates',       icon:'📐' },
+  { key:'library',    label:'Exercise Library',icon:'📚' },
+  { key:'hostmeet',   label:'Host Meet',       icon:'🏆' },
+];
+function loadToolsVisible() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TOOLS_VISIBLE_KEY) || '{}');
+    TOOL_DEFS.forEach(t => { _toolsVisible[t.key] = saved[t.key] !== false; });
+  } catch { TOOL_DEFS.forEach(t => { _toolsVisible[t.key] = true; }); }
+}
+function saveToolsVisible() {
+  localStorage.setItem(TOOLS_VISIBLE_KEY, JSON.stringify(_toolsVisible));
+}
+function toggleTool(key) {
+  _toolsVisible[key] = !_toolsVisible[key];
+  saveToolsVisible();
+  renderSidebar();
+  renderHeader();
+  if (document.getElementById('overlay').style.display !== 'none') openSettings();
+}
+function openSettings() {
+  const activeTeamName = esc((_stateCore.teams[_stateCore.activeTeamId] || {}).name || 'Team');
+  const toggle = (key) => {
+    const on = _toolsVisible[key] !== false;
+    return `<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;flex-shrink:0;">
+      <input type="checkbox" ${on?'checked':''} onchange="toggleTool('${key}')" style="opacity:0;width:0;height:0;position:absolute;">
+      <span style="position:absolute;inset:0;background:${on?'#3B82F6':'var(--dark3)'};border-radius:24px;transition:.2s;display:block;">
+        <span style="position:absolute;left:${on?'22px':'2px'};top:2px;width:20px;height:20px;background:white;border-radius:50%;transition:.2s;display:block;"></span>
+      </span>
+    </label>`;
+  };
+  const toolRows = TOOL_DEFS.map((t, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;${i<TOOL_DEFS.length-1?'border-bottom:1px solid var(--dark3);':''}">
+      <span style="font-size:14px;">${t.icon} ${t.label}</span>
+      ${toggle(t.key)}
+    </div>`).join('');
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
+      <h3 style="margin:0;">Settings</h3>
+      <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:0;" onmouseenter="this.style.color='var(--white)'" onmouseleave="this.style.color='var(--muted)'">✕</button>
+    </div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Tools</div>
+    <div style="border:1px solid var(--dark3);border-radius:8px;overflow:hidden;margin-bottom:1.5rem;">${toolRows}</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Data &amp; Backup</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
+        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Full Backup</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Export all teams and programs as a JSON file</div></div>
+        <button onclick="exportDataJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬇ Download</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
+        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Team Download</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Export <strong>${activeTeamName}</strong> only as a JSON file</div></div>
+        <button onclick="exportTeamJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬇ Download</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
+        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Restore</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Import a previously exported JSON backup</div></div>
+        <button onclick="importDataJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬆ Restore</button>
+      </div>
+    </div>
+    <div style="height:1px;background:var(--dark3);margin-bottom:1rem;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid rgba(192,57,43,0.3);border-radius:8px;background:rgba(192,57,43,0.05);">
+      <div><div style="font-size:14px;font-weight:600;color:#E07070;">Clear All Data</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Delete everything and start fresh — cannot be undone</div></div>
+      <button onclick="clearAllData()" class="btn btn-danger" style="font-size:12px;padding:5px 12px;flex-shrink:0;">🗑 Clear</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+}
+
 // ── FERPA Notice ──
 const FERPA_KEY = 'liftbuilder_ferpa_ack';
 function checkFerpaNotice() {
@@ -5552,6 +5624,7 @@ function acknowledgeFerpa() {
 // ── Init ──
 function initApp() {
   loadState();
+  loadToolsVisible();
   // Ensure we always have at least one team
   if (!_stateCore.activeTeamId || !_stateCore.teams[_stateCore.activeTeamId]) {
     _createDefaultTeam();
