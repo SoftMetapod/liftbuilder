@@ -74,7 +74,7 @@ jobs:
       - name: Build Mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run build:mac
+        run: npm run build:mac -- --publish never
 
       - name: Upload Mac assets
         env:
@@ -107,7 +107,7 @@ jobs:
       - name: Build Windows
         env:
           WIN_CSC_LINK: ''
-        run: npm run build:win
+        run: npm run build:win -- --publish never
 
       - name: Upload Windows assets
         env:
