@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "5.3.1",
+  "version": "5.3.2",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
