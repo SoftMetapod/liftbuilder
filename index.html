@@ -5290,10 +5290,11 @@ function importSharedProgram() {
       try {
         const data = JSON.parse(ev.target.result);
         validateNoProtoPollution(data);
-        if (!data._liftbuilder || !data.programs) {
+        const programsMap = data.programs || (data._teamExport && data.team && data.team.programs);
+        if (!data._liftbuilder || !programsMap) {
           alert('Not a valid LiftBuilder program file.'); return;
         }
-        const incoming = Object.values(data.programs);
+        const incoming = Object.values(programsMap);
         if (!incoming.length) { alert('No programs found in this file.'); return; }
         if (incoming.length === 1) {
           _doImportPrograms(incoming);
