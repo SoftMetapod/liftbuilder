@@ -1770,18 +1770,22 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
 
   function renderDay(day, dd) {
     const allEx = [
-      ...(dd?.exercises   || []).map(e => ({...e, _sec:'main'})),
       ...(dd?.warmup      || []).map(e => ({...e, _sec:'warmup'})),
+      ...(dd?.exercises   || []).map(e => ({...e, _sec:'main'})),
       ...(dd?.accessories || []).map(e => ({...e, _sec:'acc'})),
     ];
 
     let tbody = '';
     let lastSec = '';
     allEx.forEach(ex => {
-      if (ex._sec !== lastSec && lastSec !== '') {
-        const lbl = ex._sec === 'warmup' ? 'WARM-UP' : 'ACCESSORIES';
-        const clr = ex._sec === 'warmup' ? '#3a86d4' : '#5ec08a';
-        tbody += `<tr><td colspan="4" style="padding:4px 10px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;text-align:center;font-size:7.5pt;font-weight:700;letter-spacing:1px;color:${clr};">&mdash; ${lbl} &mdash;</td></tr>`;
+      if (ex._sec !== lastSec) {
+        if (ex._sec === 'warmup') {
+          tbody += `<tr><td colspan="4" style="padding:4px 10px;background:#eef6ff;border-bottom:1px solid #c8dff5;text-align:center;font-size:7.5pt;font-weight:700;letter-spacing:1px;color:#3a86d4;">&mdash; WARM-UP &mdash;</td></tr>`;
+        } else if (ex._sec === 'main' && lastSec === 'warmup') {
+          tbody += `<tr><td colspan="4" style="padding:4px 10px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;text-align:center;font-size:7.5pt;font-weight:700;letter-spacing:1px;color:#555;">&mdash; MAIN WORK &mdash;</td></tr>`;
+        } else if (ex._sec === 'acc') {
+          tbody += `<tr><td colspan="4" style="padding:4px 10px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;text-align:center;font-size:7.5pt;font-weight:700;letter-spacing:1px;color:#5ec08a;">&mdash; ACCESSORIES &mdash;</td></tr>`;
+        }
       }
       lastSec = ex._sec;
       tbody += renderEx(ex);
