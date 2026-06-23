@@ -1614,341 +1614,340 @@ function runExport() {
   }, 80);
 }
 
-// ── Core PDF builder ──────────────────────────────
-function buildPDF(weekNums, inclMobility) {
-  const { jsPDF } = window.jspdf;
+// ── Core PDF builder (HTML template → Electron printToPDF) ──────────────────
+function _buildProgramPDFHtml(wNums, inclMobility) {
   const p = prog();
-  // Portrait letter — sequential days, two-column exercise rows (name | sets/load)
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
 
-  // Portrait: 612×792pt
-  const PW = 612, PH = 792;
-  const ML = 40, MR = 40, MT = 44, MB = 36;
-  const CW = PW - ML - MR; // 532
-  const CONTENT_BOTTOM = PH - MB - 22; // bottom of usable area (above footer)
-
-  const GOLD  = [201,168,76];
-  const DARK  = [26,26,26];
-  const MID   = [110,110,110];
-  const BLACK = [20,20,20];
-  const LIGHT = [248,248,246];
-
-  const CAT_COLORS_RGB = {
-    snatch:[201,168,76], clean:[58,134,212], jerk:[106,174,245], cj:[32,96,184],
-    squat:[94,192,138],  bench:[192,96,96],
-    accessory:[136,136,136], plyo:[160,127,212],
-    core:[212,138,80],   other:[80,80,80],
+  const PHASE_LABELS = {
+    accumulation:    'Accumulation',
+    intensification: 'Intensification',
+    realization:     'Realization',
+    deload:          'Deload',
   };
 
-  const pdfPct = (lo, hi) => {
-    if (lo<=0 && (!hi||hi<=0)) return '—';
-    if (hi>lo) return `${lo}–${hi}%`;
-    return lo>0 ? `${lo}%` : '—';
+  const PHASE_STYLES = {
+    accumulation:    'background:#e8f5ee;color:#1a7a3f;border:1px solid #82c99a',
+    intensification: 'background:#e3f0fb;color:#1a5fa3;border:1px solid #7ab1e0',
+    realization:     'background:#fff4e0;color:#b86e00;border:1px solid #f5c26b',
+    deload:          'background:#eef0f8;color:#4a5280;border:1px solid #9aa0c8',
   };
 
-  const safeName = p.name.replace(/[^a-zA-Z0-9]/g, '_');
-  let pageNum = 1;
-  let y = MT;
+  const CAT_CLR = {
+    snatch:'#c9a84c', clean:'#3a86d4', jerk:'#6aaef5', cj:'#2060b8',
+    squat:'#5ec08a',  bench:'#c06060', accessory:'#888', plyo:'#a07fd4',
+    core:'#d48a50',   other:'#505050',
+  };
 
-  // Two-column split: exercise name left, sets/load right
-  const NAME_W = 210;
-  const SETS_X = ML + NAME_W + 10;
-  const SETS_W = CW - NAME_W - 10;
-
-  function addPageHeader() {
-    doc.setFillColor(...GOLD);
-    doc.rect(0, 0, PW, 4, 'F');
+  function pct(lo, hi) {
+    lo = lo || 0; hi = hi || 0;
+    if (lo <= 0 && hi <= 0) return '—';
+    if (hi > lo) return `${lo}–${hi}%`;
+    return lo > 0 ? `${lo}%` : '—';
   }
 
-  function addFooter() {
-    doc.setDrawColor(...GOLD);
-    doc.setLineWidth(0.4);
-    doc.line(ML, CONTENT_BOTTOM + 4, PW - MR, CONTENT_BOTTOM + 4);
-    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MID);
-    doc.text(p.name + (p.org ? '  ·  ' + p.org : ''), ML, CONTENT_BOTTOM + 16);
-    doc.text(`Page ${pageNum}`, PW - MR, CONTENT_BOTTOM + 16, { align: 'right' });
+  function fmtLoad(ex, sg) {
+    sg = sg || (ex.setGroups || [])[0];
+    if (ex.scheme === 'heavy_single') return 'MAX';
+    if (ex.useRPE) return `RPE ${(sg && sg.rpe) || ex.rpe || 8}`;
+    return pct((sg && sg.intensity) != null ? sg.intensity : (ex.intensity || 0),
+               (sg && sg.intensityHigh) != null ? sg.intensityHigh : (ex.intensityHigh || 0));
   }
 
-  function newPage() {
-    addFooter();
-    doc.addPage();
-    pageNum++;
-    addPageHeader();
-    y = MT;
+  function fmtReps(ex, sg) {
+    sg = sg || (ex.setGroups || [])[0];
+    if (ex.scheme === 'heavy_single') return '1';
+    if (ex.useTime) return `${(sg && sg.seconds) || ex.seconds || 0}s`;
+    if (ex.scheme === 'amrap') return `${ex.reps || 0}+`;
+    return String((sg && sg.reps) || ex.reps || 0);
   }
 
-  // Ensure at least `needed` pts remain before CONTENT_BOTTOM; break page if not.
-  function ensureSpace(needed) {
-    if (y + needed > CONTENT_BOTTOM) newPage();
+  function catDot(cat) {
+    const c = CAT_CLR[cat] || '#888';
+    return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:7px;flex-shrink:0;margin-top:3px;"></span>`;
   }
 
-  // Draw a horizontal rule separator between exercises
-  function drawSep() {
-    doc.setDrawColor(220,220,218); doc.setLineWidth(0.2);
-    doc.line(ML, y, PW - MR, y);
-  }
+  function renderEx(ex) {
+    const name = ex.name || '';
+    const isOpt = /^\[OPT\]/i.test(name) || /^\(OPT\)/i.test(name);
+    const displayName = isOpt ? name.replace(/^\[OPT\]\s*/i, '').replace(/^\(OPT\)\s*/i, '') : name;
+    const rowBg  = isOpt ? 'background:#f8f8f8;' : '';
+    const nameStyle = isOpt
+      ? 'font-style:italic;color:#777;font-weight:400;'
+      : 'font-weight:600;color:#1a1a1a;';
 
-  addPageHeader();
-
-  // ── Render each week ──────────────────────────────
-  weekNums.forEach((wNum, wi) => {
-    const wd = getWeek(wNum);
-    if (!wd) return;
-    if (wi > 0) newPage();
-
-    // Week header bar
-    ensureSpace(34);
-    doc.setFillColor(...DARK);
-    doc.roundedRect(ML, y, CW, 28, 3, 3, 'F');
-    doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(242,217,138);
-    doc.text(`WEEK ${wNum}`, ML + 12, y + 19);
-    const hdrRight = [p.name, p.org, p.season].filter(Boolean).join('  ·  ');
-    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(160,160,160);
-    doc.text(hdrRight, PW - MR - 10, y + 19, { align:'right' });
-    y += 34;
-
-    // Coach week note
-    if (wd.note) {
-      const noteLines = doc.splitTextToSize('Note: ' + wd.note, CW - 8);
-      noteLines.forEach(line => {
-        ensureSpace(13);
-        doc.setFontSize(8); doc.setFont('helvetica','italic'); doc.setTextColor(...MID);
-        doc.text(line, ML + 4, y + 9);
-        y += 13;
-      });
-      y += 4;
+    // Wave / ladder — multiple set groups
+    if (!ex.isSuperset && !ex.isComplex && (ex.setGroups || []).length > 1) {
+      return ex.setGroups.map((sg, i) => {
+        const isTop = ex.scheme === 'ladder' && i === ex.setGroups.length - 1;
+        const lClr = isTop ? '#9a6e10' : '#1a5fa3';
+        const lWt  = isTop ? 'font-weight:700;' : 'font-weight:600;';
+        if (i === 0) {
+          return `<tr style="${rowBg}">
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;">
+              <div style="display:flex;align-items:flex-start;">${catDot(ex.category)}<div>
+                <span style="${nameStyle}">${esc(displayName)}</span>
+                ${isOpt ? `<div style="font-size:7pt;color:#aaa;">[OPTIONAL]</div>` : ''}
+              </div></div>
+            </td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:#333;">${esc(sg.sets)}×${esc(fmtReps(ex,sg))}</td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:${lClr};${lWt}">${esc(fmtLoad(ex,sg))}${isTop ? ' ▲' : ''}</td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;color:#666;font-style:italic;font-size:8.5pt;">${ex.note ? esc(ex.note) : ''}</td>
+          </tr>`;
+        }
+        return `<tr style="${rowBg}">
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;"></td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:#333;">${esc(sg.sets)}×${esc(fmtReps(ex,sg))}</td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:${lClr};${lWt}">${esc(fmtLoad(ex,sg))}${isTop ? ' ▲' : ''}</td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;"></td>
+        </tr>`;
+      }).join('');
     }
 
-    const days = trainingDays().filter(d => wd.days?.[d]);
+    // Superset
+    if (ex.isSuperset && (ex.supersetExercises || []).length) {
+      const LTRS = ['A','B','C','D'];
+      const seRows = (ex.supersetExercises || []).map((se, si) => {
+        const seLoad = se.useRPE ? `RPE ${se.rpe||8}` : pct(se.intensity||0, se.intensityHigh||0);
+        const seReps = se.useTime ? `${se.seconds||0}s` : String(se.reps||0);
+        return `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:3px;">
+          ${catDot(se.category)}
+          <span style="font-weight:700;color:#b09030;font-size:8.5pt;flex-shrink:0;">${LTRS[si]}.</span>
+          <span style="flex:1;font-size:9.5pt;">${esc(se.name)}</span>
+          <span style="color:#333;white-space:nowrap;font-size:9pt;">${seReps}</span>
+          <span style="color:#1a5fa3;font-weight:600;white-space:nowrap;font-size:9pt;margin-left:8px;">${seLoad}</span>
+        </div>`;
+      }).join('');
+      return `<tr>
+        <td colspan="4" style="padding:8px 10px;border-bottom:1px solid #eee;">
+          <div style="font-size:8pt;font-weight:700;color:#5080b0;margin-bottom:5px;letter-spacing:0.5px;">SUPERSET &middot; ${ex.sets||0} sets</div>
+          ${seRows}
+          ${ex.note ? `<div style="color:#888;font-style:italic;font-size:8pt;margin-top:4px;">${esc(ex.note)}</div>` : ''}
+        </td>
+      </tr>`;
+    }
 
-    days.forEach(day => {
-      const dd = wd.days[day];
+    // Complex
+    if (ex.isComplex && (ex.movements || []).length) {
+      const mvRows = (ex.movements || []).map(mv =>
+        `<div style="display:flex;align-items:baseline;gap:6px;padding-left:15px;margin-bottom:2px;">
+          <span style="color:#bbb;font-size:9pt;">&#8594;</span>
+          <span style="font-size:9.5pt;">${esc(mv.reps)}&times;&nbsp;${esc(mv.name)}</span>
+        </div>`
+      ).join('');
+      return `<tr style="${rowBg}">
+        <td colspan="4" style="padding:8px 10px;border-bottom:1px solid #eee;">
+          <div style="display:flex;align-items:flex-start;margin-bottom:5px;">
+            ${catDot(ex.category)}<div>
+              <span style="${nameStyle}">${esc(displayName)}</span>
+              <span style="margin-left:10px;color:#555;font-size:9pt;">${ex.sets||0} sets @ ${fmtLoad(ex)}</span>
+            </div>
+          </div>
+          ${mvRows}
+          ${ex.note ? `<div style="color:#888;font-style:italic;font-size:8pt;margin-top:4px;padding-left:15px;">${esc(ex.note)}</div>` : ''}
+        </td>
+      </tr>`;
+    }
 
-      // Day header — keep together with at least one exercise row below it
-      ensureSpace(56);
-      doc.setFillColor(38, 38, 38);
-      doc.roundedRect(ML, y, CW, 24, 2, 2, 'F');
-      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(242,217,138);
-      doc.text(day.toUpperCase(), ML + 10, y + 16);
-      if (dd?.focus) {
-        const focusX = ML + 10 + doc.getTextWidth(day.toUpperCase()) + 8;
-        doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
-        const focusTxt = doc.splitTextToSize(dd.focus, PW - MR - focusX - 8)[0];
-        doc.text(focusTxt, focusX, y + 16);
+    // Standard exercise
+    const sg0 = (ex.setGroups || [])[0];
+    const setsN = (sg0 && sg0.sets) || ex.sets || 0;
+    const schemeTag = (ex.scheme && ex.scheme !== 'normal')
+      ? `<span style="margin-left:7px;font-size:7pt;font-weight:700;padding:1px 5px;border-radius:2px;vertical-align:middle;background:${ex.scheme==='amrap'?'#fde8e8':ex.scheme==='heavy_single'?'#fff8e0':'#e8f5e8'};color:${ex.scheme==='amrap'?'#c03030':ex.scheme==='heavy_single'?'#a07020':'#207040'};">${ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'MAX':'LADDER'}</span>`
+      : '';
+
+    return `<tr style="${rowBg}">
+      <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;">
+        <div style="display:flex;align-items:flex-start;">${catDot(ex.category)}<div>
+          <span style="${nameStyle}">${esc(displayName)}</span>${schemeTag}
+          ${isOpt ? `<div style="font-size:7pt;color:#aaa;">[OPTIONAL]</div>` : ''}
+        </div></div>
+      </td>
+      <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:#333;">${esc(setsN)}&times;${esc(fmtReps(ex,sg0))}</td>
+      <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:#1a5fa3;font-weight:600;">${esc(fmtLoad(ex,sg0))}</td>
+      <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;color:#666;font-style:italic;font-size:8.5pt;">${ex.note ? esc(ex.note) : ''}</td>
+    </tr>`;
+  }
+
+  function renderDay(day, dd) {
+    const allEx = [
+      ...(dd?.exercises   || []).map(e => ({...e, _sec:'main'})),
+      ...(dd?.warmup      || []).map(e => ({...e, _sec:'warmup'})),
+      ...(dd?.accessories || []).map(e => ({...e, _sec:'acc'})),
+    ];
+
+    let tbody = '';
+    let lastSec = '';
+    allEx.forEach(ex => {
+      if (ex._sec !== lastSec && lastSec !== '') {
+        const lbl = ex._sec === 'warmup' ? 'WARM-UP' : 'ACCESSORIES';
+        const clr = ex._sec === 'warmup' ? '#3a86d4' : '#5ec08a';
+        tbody += `<tr><td colspan="4" style="padding:4px 10px;background:#f5f5f5;border-bottom:1px solid #e0e0e0;text-align:center;font-size:7.5pt;font-weight:700;letter-spacing:1px;color:${clr};">&mdash; ${lbl} &mdash;</td></tr>`;
       }
-      y += 28;
-
-      // Column header labels
-      doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...MID);
-      doc.text('EXERCISE', ML + 10, y + 8);
-      doc.text('SETS / REPS / LOAD', SETS_X, y + 8);
-      doc.setDrawColor(...GOLD); doc.setLineWidth(0.4);
-      doc.line(ML, y + 12, PW - MR, y + 12);
-      y += 15;
-
-      const allEx = [
-        ...(dd?.exercises   || []).map(e => ({...e, _sec:'main'})),
-        ...(dd?.warmup      || []).map(e => ({...e, _sec:'warmup'})),
-        ...(dd?.accessories || []).map(e => ({...e, _sec:'acc'})),
-      ];
-
-      if (!allEx.length) {
-        ensureSpace(20);
-        doc.setFontSize(8.5); doc.setFont('helvetica','italic'); doc.setTextColor(...MID);
-        doc.text('Rest day', ML + 10, y + 12);
-        y += 20;
-      }
-
-      let lastSec = 'main';
-
-      allEx.forEach((ex, idx) => {
-        // Section divider when switching sections
-        if (ex._sec !== lastSec) {
-          lastSec = ex._sec;
-          const label  = ex._sec === 'warmup' ? '— WARM-UP —' : '— ACCESSORIES —';
-          const lColor = ex._sec === 'warmup' ? [80,140,200] : [80,180,130];
-          ensureSpace(18);
-          doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...lColor);
-          doc.text(label, PW / 2, y + 10, { align: 'center' });
-          doc.setDrawColor(...lColor); doc.setLineWidth(0.3);
-          doc.line(ML + 2, y + 13, PW - MR - 2, y + 13);
-          y += 17;
-        }
-
-        if (ex.isSuperset && ex.supersetExercises?.length) {
-          // ── Superset ────────────────────────────────
-          const LTRS = ['A','B','C','D'];
-          const entryH = 24;
-          const totalH = 16 + ex.supersetExercises.length * entryH + (ex.note ? 14 : 0) + 4;
-          ensureSpace(totalH);
-
-          if (idx % 2 === 0) { doc.setFillColor(...LIGHT); doc.rect(ML, y, CW, totalH, 'F'); }
-          doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(100,130,180);
-          doc.text(`SUPERSET  ·  ${ex.sets||0} sets`, ML + 10, y + 12);
-          let sey = y + 18;
-          ex.supersetExercises.forEach((se, si) => {
-            const catRGB = CAT_COLORS_RGB[se.category] || [80,80,80];
-            doc.setFillColor(...catRGB); doc.circle(ML + 6, sey + 8, 2.5, 'F');
-            doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(180,145,40);
-            doc.text(LTRS[si]+'.', ML + 11, sey + 10);
-            doc.setFont('helvetica','normal'); doc.setTextColor(...BLACK);
-            doc.text(doc.splitTextToSize(se.name, NAME_W - 22)[0], ML + 21, sey + 10);
-            doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...MID);
-            const seLoad = (se.useTime ? `${se.seconds||0}s` : `${se.reps||0} reps`) +
-              '  @  ' + (se.useRPE ? `RPE ${se.rpe||8}` : pdfPct(se.intensity||0, se.intensityHigh||0));
-            doc.text(seLoad, SETS_X, sey + 10);
-            sey += entryH;
-          });
-          if (ex.note) {
-            doc.setFontSize(7.5); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
-            doc.text(doc.splitTextToSize(ex.note, CW - 12)[0], ML + 10, sey + 10);
-            sey += 14;
-          }
-          drawSep();
-          y += totalH;
-
-        } else if (ex.isComplex && ex.movements?.length) {
-          // ── Complex ─────────────────────────────────
-          const mvH = 13;
-          const totalH = 26 + ex.movements.length * mvH + (ex.note ? 14 : 0);
-          ensureSpace(totalH);
-
-          if (idx % 2 === 0) { doc.setFillColor(...LIGHT); doc.rect(ML, y, CW, totalH, 'F'); }
-          const catRGB = CAT_COLORS_RGB[ex.category] || [80,80,80];
-          doc.setFillColor(...catRGB); doc.circle(ML + 6, y + 12, 2.5, 'F');
-          doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...BLACK);
-          doc.text(doc.splitTextToSize(ex.name||'Complex', NAME_W - 14)[0], ML + 12, y + 13);
-          doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...MID);
-          doc.text(`${ex.sets||0} sets  @  ${ex.intensity||0}%`, SETS_X, y + 13);
-          let mvy = y + 24;
-          ex.movements.forEach(mv => {
-            const mvRGB = CAT_COLORS_RGB[mv.category] || [120,120,120];
-            doc.setFillColor(...mvRGB); doc.setDrawColor(...mvRGB); doc.setLineWidth(1.2);
-            doc.line(ML + 18, mvy + 2, ML + 18, mvy + 10);
-            doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(65,65,65);
-            doc.text(`${mv.reps}×  ${doc.splitTextToSize(mv.name, NAME_W - 24)[0]}`, ML + 22, mvy + 9);
-            mvy += mvH;
-          });
-          if (ex.note) {
-            doc.setFontSize(7.5); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
-            doc.text(doc.splitTextToSize(ex.note, CW - 12)[0], ML + 12, mvy + 10);
-            mvy += 14;
-          }
-          drawSep();
-          y += totalH;
-
-        } else if (!ex.isComplex && ex.setGroups?.length > 1) {
-          // ── Multiple set groups (wave / ladder) ──────
-          const sgH = 14;
-          const nameLines = doc.splitTextToSize(ex.name||'', NAME_W - 14);
-          const nameBlockH = nameLines.length * 12;
-          const totalH = Math.max(26, nameBlockH + 6) + ex.setGroups.length * sgH + (ex.note ? 14 : 0);
-          ensureSpace(totalH);
-
-          if (idx % 2 === 0) { doc.setFillColor(...LIGHT); doc.rect(ML, y, CW, totalH, 'F'); }
-          const catRGB = CAT_COLORS_RGB[ex.category] || [80,80,80];
-          doc.setFillColor(...catRGB); doc.circle(ML + 6, y + 12, 2.5, 'F');
-          doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...BLACK);
-          let ny = y + 13;
-          nameLines.forEach(line => { doc.text(line, ML + 12, ny); ny += 12; });
-          let sgy = y + Math.max(22, nameBlockH + 4);
-          ex.setGroups.forEach((sg, si) => {
-            const isTop = ex.scheme==='ladder' && si===ex.setGroups.length-1;
-            doc.setFontSize(8.5); doc.setFont('helvetica', isTop?'bold':'normal');
-            doc.setTextColor(...(isTop ? [100,80,20] : MID));
-            const sgTxt = `${sg.sets}×${ex.useTime ? sg.seconds+'s' : sg.reps+' reps'}  @  ${pdfPct(sg.intensity||0, sg.intensityHigh||0)}${isTop ? '  ▲' : ''}`;
-            doc.text(sgTxt, SETS_X, sgy + 10);
-            sgy += sgH;
-          });
-          if (ex.note) {
-            doc.setFontSize(7.5); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
-            doc.text(doc.splitTextToSize(ex.note, CW - 12)[0], ML + 12, sgy + 10);
-            sgy += 14;
-          }
-          drawSep();
-          y += totalH;
-
-        } else {
-          // ── Standard single exercise ─────────────────
-          const sg0 = ex.setGroups?.[0];
-          const pctStr = ex.scheme==='heavy_single' ? 'max'
-            : ex.useRPE ? `RPE ${sg0?.rpe||8}`
-            : pdfPct(sg0?.intensity ?? ex.intensity ?? 0, sg0?.intensityHigh ?? 0);
-          const repsStr = ex.scheme==='heavy_single' ? 'max'
-            : ex.useTime ? `${sg0?.seconds||ex.seconds||0}s`
-            : ex.scheme==='amrap' ? `${ex.reps||0}+`
-            : String(ex.reps||0);
-
-          const nameLines = doc.splitTextToSize(ex.name||'', NAME_W - 14);
-          const rowH = Math.max(26, nameLines.length * 13 + 8) + (ex.note ? 14 : 0);
-          ensureSpace(rowH);
-
-          if (idx % 2 === 0) { doc.setFillColor(...LIGHT); doc.rect(ML, y, CW, rowH, 'F'); }
-          const catRGB = CAT_COLORS_RGB[ex.category] || [80,80,80];
-          doc.setFillColor(...catRGB); doc.circle(ML + 6, y + 12, 2.5, 'F');
-
-          // Exercise name (bold for main, italic for warmup/accessory)
-          const isSub = ex._sec === 'warmup' || ex._sec === 'acc';
-          doc.setFontSize(9); doc.setFont('helvetica', isSub ? 'italic' : 'bold');
-          doc.setTextColor(...BLACK);
-          let ny = y + 13;
-          nameLines.forEach(line => { doc.text(line, ML + 12, ny); ny += 13; });
-
-          // Sets / reps / load
-          doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...MID);
-          doc.text(`${ex.sets||0}×${repsStr}  @  ${pctStr}`, SETS_X, y + 13);
-
-          // Scheme tag (AMRAP / HEAVY SINGLE / LADDER)
-          if (ex.scheme && ex.scheme !== 'normal') {
-            const tag = ex.scheme==='amrap' ? 'AMRAP' : ex.scheme==='heavy_single' ? 'HEAVY SINGLE' : 'LADDER';
-            doc.setFontSize(7); doc.setFont('helvetica','bold');
-            doc.setTextColor(...(ex.scheme==='amrap'?[200,60,60]:ex.scheme==='heavy_single'?[180,145,20]:[80,160,80]));
-            doc.text(tag, PW - MR - 6, y + 13, { align:'right' });
-          }
-
-          if (ex.note) {
-            doc.setFontSize(7.5); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
-            doc.text(doc.splitTextToSize(ex.note, CW - 12)[0], ML + 12, y + rowH - 5);
-          }
-
-          drawSep();
-          y += rowH;
-        }
-      });
-
-      // Mobility block at bottom of day
-      if (inclMobility && dd?.mobility) {
-        ensureSpace(22);
-        doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(80,160,200);
-        doc.text('MOBILITY', ML + 10, y + 11);
-        y += 16;
-        const mobLines = doc.splitTextToSize(dd.mobility, CW - 12);
-        mobLines.forEach(line => {
-          ensureSpace(13);
-          doc.setFontSize(8.5); doc.setFont('helvetica','italic'); doc.setTextColor(...MID);
-          doc.text(line, ML + 10, y + 10);
-          y += 13;
-        });
-      }
-
-      y += 16; // breathing room between days
+      lastSec = ex._sec;
+      tbody += renderEx(ex);
     });
-  });
 
-  addFooter();
+    if (!allEx.length) {
+      tbody = `<tr><td colspan="4" style="padding:12px 10px;color:#aaa;font-style:italic;text-align:center;">Rest day</td></tr>`;
+    }
 
-  const filename = weekNums.length === 1
-    ? `${safeName}_Week${weekNums[0]}.pdf`
+    const focus   = dd?.focus   || '';
+    const dayNote = dd?.dayNote || '';
+
+    return `<div style="margin-bottom:18px;break-inside:avoid-page;">
+      <div style="background:#1f3a5f;color:#fff;padding:9px 14px;display:flex;align-items:center;gap:10px;border-radius:4px 4px 0 0;">
+        <span style="font-size:8pt;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:rgba(255,255,255,0.18);padding:2px 9px;border-radius:3px;white-space:nowrap;">${esc(day.toUpperCase())}</span>
+        ${focus ? `<span style="font-size:10.5pt;font-weight:600;">${esc(focus)}</span>` : ''}
+      </div>
+      ${dayNote ? `<div style="background:#fffbf0;border-left:3px solid #f5c26b;padding:6px 12px;font-size:9pt;font-style:italic;color:#666;">&#128204; ${esc(dayNote)}</div>` : ''}
+      <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none;">
+        <thead><tr style="background:#f5f5f5;">
+          <th style="padding:5px 10px;text-align:left;font-size:7pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;border-bottom:1px solid #ddd;width:38%;">Exercise</th>
+          <th style="padding:5px 10px;text-align:left;font-size:7pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;border-bottom:1px solid #ddd;white-space:nowrap;">Sets&times;Reps</th>
+          <th style="padding:5px 10px;text-align:left;font-size:7pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;border-bottom:1px solid #ddd;">Load</th>
+          <th style="padding:5px 10px;text-align:left;font-size:7pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;border-bottom:1px solid #ddd;">Cue / Note</th>
+        </tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+      ${inclMobility && dd?.mobility ? `<div style="background:#f0f7ff;border:1px solid #c8dff5;border-top:none;padding:7px 12px;font-size:8.5pt;color:#2a5080;border-radius:0 0 4px 4px;"><span style="font-size:7pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#4a80b0;display:block;margin-bottom:3px;">MOBILITY</span>${esc(dd.mobility)}</div>` : ''}
+    </div>`;
+  }
+
+  function renderWeek(wNum, isFirst) {
+    const wd = getWeek(wNum);
+    if (!wd) return '';
+    const phase  = wd.phase || 'accumulation';
+    const phLbl  = PHASE_LABELS[phase] || phase;
+    const phStyle = PHASE_STYLES[phase] || PHASE_STYLES.accumulation;
+    const days   = trainingDays().filter(d => wd.days?.[d]);
+
+    return `<div style="page-break-before:${isFirst ? 'avoid' : 'always'};">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;padding-bottom:8px;border-bottom:2.5px solid #1a1a1a;">
+        <div style="display:flex;align-items:baseline;gap:14px;">
+          <span style="font-size:22pt;font-weight:900;text-transform:uppercase;letter-spacing:-0.5px;">WEEK ${wNum}</span>
+          ${wd.note ? `<span style="font-size:11pt;color:#555;font-weight:400;">${esc(wd.note)}</span>` : ''}
+        </div>
+        <span style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:8.5pt;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;${phStyle};white-space:nowrap;">${esc(phLbl)}</span>
+      </div>
+      ${days.map(d => renderDay(d, wd.days[d])).join('')}
+    </div>`;
+  }
+
+  // ── Cover page (full program only) ──
+  const isFullProg = wNums.length > 1;
+  let coverHTML = '';
+
+  if (isFullProg) {
+    const macroRows = wNums.map(wNum => {
+      const wd = getWeek(wNum);
+      if (!wd) return '';
+      const phase  = wd.phase || 'accumulation';
+      const phLbl  = PHASE_LABELS[phase] || phase;
+      const phStyle = PHASE_STYLES[phase] || PHASE_STYLES.accumulation;
+      return `<tr>
+        <td style="padding:7px 12px;border-bottom:1px solid #eee;font-weight:600;color:#333;">${wNum}</td>
+        <td style="padding:7px 12px;border-bottom:1px solid #eee;">
+          <span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:8pt;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;${phStyle};">${esc(phLbl)}</span>
+        </td>
+        <td style="padding:7px 12px;border-bottom:1px solid #eee;color:#555;font-size:9.5pt;">${esc(wd.note || '')}</td>
+      </tr>`;
+    }).join('');
+
+    const infoCards = [
+      { label:'Duration',      value:`${wNums.length}-week program` },
+      { label:'Training Days', value:trainingDays().join(', ') },
+      p.season ? { label:'Season',       value:p.season } : null,
+      p.org    ? { label:'Organization', value:p.org    } : null,
+    ].filter(Boolean).map(card =>
+      `<div style="border:1px solid #ddd;border-radius:4px;padding:12px 14px;">
+        <div style="font-size:7pt;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:4px;">${card.label}</div>
+        <div style="font-size:11pt;font-weight:600;">${esc(card.value)}</div>
+      </div>`
+    ).join('');
+
+    coverHTML = `<div style="page-break-after:always;">
+      ${(p.org || p.season) ? `<div style="font-size:9pt;letter-spacing:3px;text-transform:uppercase;color:#888;margin-bottom:10px;">${[p.org,p.season].filter(Boolean).map(s=>esc(s)).join('  &middot;  ')}</div>` : ''}
+      <div style="font-size:30pt;font-weight:900;text-transform:uppercase;line-height:1.05;margin-bottom:24px;">${esc(p.name)}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:28px;">${infoCards}</div>
+      <h2 style="font-size:13pt;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #1a1a1a;">MACROCYCLE AT A GLANCE</h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#2a2a2a;">
+          <th style="padding:8px 12px;text-align:left;color:#fff;font-size:8pt;letter-spacing:1px;text-transform:uppercase;width:60px;">WK</th>
+          <th style="padding:8px 12px;text-align:left;color:#fff;font-size:8pt;letter-spacing:1px;text-transform:uppercase;width:200px;">PHASE</th>
+          <th style="padding:8px 12px;text-align:left;color:#fff;font-size:8pt;letter-spacing:1px;text-transform:uppercase;">FOCUS / NOTE</th>
+        </tr></thead>
+        <tbody>${macroRows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  const weekPages   = wNums.map((wNum, i) => renderWeek(wNum, i === 0 && !isFullProg)).join('\n');
+  const footerLeft  = esc([p.name, p.org].filter(Boolean).join('  ·  '));
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: letter; margin: 0.5in 0.5in 0.8in 0.5in; }
+    body {
+      font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      color: #1a1a1a;
+      font-size: 10pt;
+      line-height: 1.4;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    table { border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  ${coverHTML}
+  ${weekPages}
+  <div style="position:fixed;bottom:0.25in;left:0;right:0;padding:5px 0.5in 0;font-size:7pt;color:#aaa;display:flex;justify-content:space-between;border-top:0.5px solid #ddd;">
+    <span>${footerLeft}</span>
+    <span>Generated by LiftBuilder</span>
+  </div>
+</body>
+</html>`;
+}
+
+function _doExportProgramPDF(wNums, inclMobility) {
+  const p = prog();
+  const html = _buildProgramPDFHtml(wNums, inclMobility);
+  const safeName = p.name.replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = wNums.length === 1
+    ? `${safeName}_Week${wNums[0]}.pdf`
     : `${safeName}_FullProgram.pdf`;
-  doc.save(filename);
+
+  const api = window.liftbuilderApp;
+  if (api?.exportProgramPDF) {
+    api.exportProgramPDF({ html, filename })
+      .then(r => showToast(r?.success ? 'PDF saved.' : r?.error ? 'PDF failed: ' + r.error : 'PDF export cancelled.'))
+      .catch(e => showToast('PDF export failed: ' + (e?.message || e || 'unknown error')));
+  } else {
+    // Browser fallback — open print window
+    const win = window.open('', '_blank');
+    if (!win) { showToast('Allow pop-ups to export PDF.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  }
+}
+
+// kept only so old callers in buildPDF still work (unused — can be removed later)
+function buildPDF(wNums, inclMobility) {
+  _doExportProgramPDF(wNums, inclMobility);
 }
 
 function exportWeekPDF(wNum, inclMobility) {
-  buildPDF([wNum], inclMobility);
+  _doExportProgramPDF([wNum], inclMobility);
 }
 
 function exportFullProgramPDF(inclMobility) {
-  buildPDF(weekNums(), inclMobility);
+  _doExportProgramPDF(weekNums(), inclMobility);
 }
 
 // ═══════════════════════════════════════════════════

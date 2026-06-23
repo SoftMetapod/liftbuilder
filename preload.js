@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('liftbuilderApp', {
   onUpdateError:      (cb) => ipcRenderer.on('update-error',         (_e, m) => cb(m)),
   openDisplayWindow:    ()         => ipcRenderer.invoke('open-display-window'),
   exportPDF:            (html)     => ipcRenderer.invoke('export-pdf', html),
+  exportProgramPDF:     (opts)     => ipcRenderer.invoke('export-program-pdf', opts),
   // Platform server
   startPlatformServer:  (meet)     => ipcRenderer.invoke('start-platform-server', meet),
   stopPlatformServer:   ()         => ipcRenderer.invoke('stop-platform-server'),

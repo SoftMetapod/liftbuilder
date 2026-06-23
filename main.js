@@ -502,6 +502,38 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('export-program-pdf', async (event, { html, filename }) => {
+    if (!_isMainWindow(event)) return { success: false };
+    const { dialog, BrowserWindow: BW } = require('electron');
+    const fs = require('fs');
+    const senderWin = BW.fromWebContents(event.sender) || mainWindow;
+    const { filePath, canceled } = await dialog.showSaveDialog(senderWin, {
+      title: 'Save Program PDF',
+      defaultPath: String(filename || 'LiftBuilder_Program.pdf'),
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    try {
+      const tmp = path.join(os.tmpdir(), '_lb_prog_pdf_tmp.html');
+      fs.writeFileSync(tmp, _stripDangerousHtml(String(html)), 'utf8');
+      const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
+      await new Promise((resolve, reject) => {
+        win.webContents.once('did-finish-load', resolve);
+        win.webContents.once('did-fail-load', (_e, code, desc) => reject(new Error(`Load failed: ${desc}`)));
+        win.loadFile(tmp);
+      });
+      await new Promise(r => setTimeout(r, 400));
+      const pdfBuf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'Letter' });
+      win.destroy();
+      fs.unlinkSync(tmp);
+      fs.writeFileSync(filePath, pdfBuf);
+      return { success: true };
+    } catch (err) {
+      console.error('[export-program-pdf]', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('open-display-window', (event) => {
     if (!_isMainWindow(event)) return;
     const display = new BrowserWindow({
