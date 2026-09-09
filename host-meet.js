@@ -343,7 +343,7 @@ const HM = (() => {
       <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--dark2);border-radius:5px;margin-bottom:6px;border:1px solid var(--dark3);">
         <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:14px;font-weight:500;">${esc(s.name)}</span>
-          ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : ''}
+          ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : `<button onclick="HM.setHomeSchool('${s.id}')" style="font-size:10px;padding:2px 7px;border-radius:3px;border:1px solid var(--dark3);background:none;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;cursor:pointer;" onmouseenter="this.style.color='var(--gold)';this.style.borderColor='var(--gold)'" onmouseleave="this.style.color='var(--muted)';this.style.borderColor='var(--dark3)'">Set as Home</button>`}
           ${s.fhsaaClass ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--dark3);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">${s.fhsaaClass === 'Ind' ? 'Ind' : `${s.fhsaaClass} · R${s.fhsaaRegion} · D${s.fhsaaDistrict}`}</span>` : ''}
         </div>
         <button onclick="HM.removeSchool('${s.id}')"
@@ -432,8 +432,7 @@ const HM = (() => {
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:1rem;">Schools (${m.schools.length})</div>
           ${schoolRows || `<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem;font-style:italic;">No schools added yet.</div>`}
           <div style="display:flex;gap:8px;margin-top:.75rem;flex-wrap:wrap;">
-            <button onclick="HM.openAddSchoolModal(true)" class="btn btn-gold" style="font-size:12px;padding:5px 12px;" ${hasHome?'disabled':''}>+ Home School</button>
-            <button onclick="HM.openAddSchoolModal(false)" class="btn btn-outline" style="font-size:12px;padding:5px 12px;">+ Visiting School</button>
+            <button onclick="HM.openAddSchoolModal()" class="btn btn-gold" style="font-size:12px;padding:5px 12px;">+ Add School</button>
           </div>
           ${m.schools.length < 2 ? `<div style="font-size:11px;color:#C9A84C;margin-top:8px;">⚠ At least 2 schools required.</div>` : ''}
         </div>
@@ -1288,12 +1287,10 @@ const HM = (() => {
     renderMain();
   }
 
-  function openAddSchoolModal(isHome) {
+  function openAddSchoolModal() {
     const m = _meet(); if (!m) return;
     autoSaveSetup();
-    if (isHome && m.schools.some(s => s.isHome)) { alert('A home school is already added.'); return; }
 
-    window._fhsaaIsHome        = isHome;
     window._fhsaaClassFilter   = 'All';
     window._fhsaaRegionFilter  = 0;
     window._fhsaaDistrictFilter= 0;
@@ -1308,7 +1305,7 @@ const HM = (() => {
     ).join('');
 
     document.getElementById('modal-body').innerHTML = `
-      <h3 style="margin-bottom:10px;">${isHome ? 'Add Home School' : 'Add Visiting School'}</h3>
+      <h3 style="margin-bottom:10px;">Add School</h3>
       <div class="form-field" style="margin-bottom:8px;">
         <input type="text" id="hm-school-name" placeholder="Search by name…"
           oninput="HM._filterSchools()" style="font-size:14px;width:100%;">
@@ -1488,8 +1485,13 @@ const HM = (() => {
     _filterSchools();
   }
 
+  function setHomeSchool(schoolId) {
+    const m = _meet(); if (!m) return;
+    m.schools.forEach(s => { s.isHome = s.id === schoolId; });
+    _save(); renderMain();
+  }
+
   function saveSchool() {
-    const isHome = window._fhsaaIsHome;
     const m = _meet(); if (!m) return;
     const picked  = window._fhsaaPickedNames || new Set();
     const inp     = document.getElementById('hm-school-name');
@@ -1498,10 +1500,11 @@ const HM = (() => {
     const fhsaa   = FHSAA_SCHOOLS[gender] || [];
     const names = picked.size > 0 ? [...picked] : (custom ? [custom] : []);
     if (!names.length) { alert('Select at least one school.'); return; }
+    const noHomeYet = !m.schools.some(s => s.isHome);
 
     names.forEach((name, i) => {
       const entry  = fhsaa.find(([n]) => n === name);
-      const school = { id: _uid('sch'), name, isHome: !!(isHome && i === 0) };
+      const school = { id: _uid('sch'), name, isHome: noHomeYet && i === 0 };
       if (entry) {
         school.fhsaaClass    = entry[1];
         school.fhsaaRegion   = entry[2];
@@ -1710,65 +1713,164 @@ const HM = (() => {
     if (!m.schools.length) { alert('Add schools first.'); return; }
     const schoolOpts = m.schools.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
     document.getElementById('modal-body').innerHTML = `
-      <h3>Import Athletes from CSV</h3>
-      <div class="form-field">
+      <h3 style="margin-bottom:10px;">Import Athletes</h3>
+      <div class="form-field" style="margin-bottom:10px;">
         <label>School</label>
         <select id="hm-csv-school">${schoolOpts}</select>
       </div>
-      <div class="form-field">
-        <label>Paste athlete data — one per line</label>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">
-          Format: <strong>Name, Weight Class, Discipline</strong><br>
-          Discipline: both · olympic · traditional · exhibition (default: both)<br>
-          Example: Jane Doe, 154, olympic
-        </div>
-        <textarea id="hm-csv-data" rows="10"
-          style="width:100%;background:var(--dark);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:8px;font-size:13px;font-family:monospace;resize:vertical;"
-          placeholder="John Smith, 154, both&#10;Jane Doe, 119, olympic&#10;Bob Jones, 129"></textarea>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:6px;">Upload File (CSV, Google Forms export, Excel)</label>
+        <label id="hm-file-drop" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:2px dashed var(--dark3);border-radius:6px;cursor:pointer;font-size:13px;color:var(--muted);transition:.15s;"
+          onmouseenter="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+          onmouseleave="this.style.borderColor='var(--dark3)';this.style.color='var(--muted)'">
+          ⬆ Click to choose a file, or drag &amp; drop
+          <input type="file" accept=".csv,.tsv,.txt" style="display:none;" onchange="HM._loadImportFile(this)">
+        </label>
+        <div id="hm-file-name" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;color:var(--muted);font-size:11px;">
+        <div style="flex:1;height:1px;background:var(--dark3);"></div>or paste below<div style="flex:1;height:1px;background:var(--dark3);"></div>
+      </div>
+      <div class="form-field">
+        <label>Athlete list — one per line, any format</label>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.6;">
+          Accepts: <strong>Name, Weight, Discipline</strong> · tab-separated Excel paste · <strong>Name Weight</strong> (plain) · Google Forms CSV with headers
+          <br>Discipline values: both · olympic · traditional · exhibition (default: both)
+        </div>
+        <textarea id="hm-csv-data" rows="9"
+          style="width:100%;background:var(--dark);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:8px;font-size:13px;font-family:monospace;resize:vertical;box-sizing:border-box;"
+          placeholder="John Smith, 154, olympic&#10;Jane Doe, 119&#10;Bob Jones	129	traditional&#10;Amy Chen 139lbs both"></textarea>
+      </div>
+      <div id="hm-import-preview" style="font-size:12px;color:var(--muted);min-height:16px;margin-bottom:6px;"></div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
         <button class="btn btn-gold" onclick="HM.confirmImportCSV()">Import</button>
       </div>`;
     document.getElementById('overlay').style.display = 'flex';
-    setTimeout(() => document.getElementById('hm-csv-data')?.focus(), 50);
+    const ta = document.getElementById('hm-csv-data');
+    ta.addEventListener('input', () => HM._previewImport(ta.value, document.getElementById('hm-import-preview')));
+    setTimeout(() => ta?.focus(), 50);
+
+    // drag-and-drop on the label
+    const drop = document.getElementById('hm-file-drop');
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor='var(--gold)'; drop.style.color='var(--gold)'; });
+    drop.addEventListener('dragleave', () => { drop.style.borderColor='var(--dark3)'; drop.style.color='var(--muted)'; });
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.style.borderColor='var(--dark3)'; drop.style.color='var(--muted)';
+      const file = e.dataTransfer?.files?.[0]; if (file) HM._loadImportFile({ files: [file] });
+    });
+  }
+
+  function _loadImportFile(input) {
+    const file = input.files?.[0]; if (!file) return;
+    document.getElementById('hm-file-name').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result || '';
+      document.getElementById('hm-csv-data').value = text;
+      HM._previewImport(text, document.getElementById('hm-import-preview'));
+    };
+    reader.readAsText(file);
+  }
+
+  function _parseImportText(raw, wcs) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+    if (!lines.length) return [];
+
+    // Detect delimiter
+    const hasTab = lines.some(l => l.includes('\t'));
+    const delim  = hasTab ? '\t' : ',';
+
+    // Check for header row (CSV with column names, e.g. Google Forms export)
+    const firstLower = lines[0].toLowerCase().replace(/[^a-z,\t]/g, '');
+    const hasHeader  = /name|athlete|weight|discipline|event/.test(firstLower);
+
+    let nameIdx = 0, wcIdx = 1, discIdx = 2;
+    let dataLines = lines;
+
+    if (hasHeader) {
+      const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ''));
+      dataLines = lines.slice(1);
+      const fi = h => headers.findIndex(x => x.includes(h));
+      const ni = Math.max(fi('name'), fi('athlete'), 0);
+      const wi = Math.max(fi('weight'), fi('class'), fi('wc'), hasTab ? 1 : -1);
+      const di = Math.max(fi('disc'), fi('event'), fi('type'), hasTab ? 2 : -1);
+      if (ni >= 0) nameIdx = ni;
+      if (wi >= 0) wcIdx   = wi;
+      if (di >= 0) discIdx = di;
+    }
+
+    function normDisc(s) {
+      const v = (s||'').trim().toLowerCase();
+      if (/^(oly|o$)/.test(v)||v==='olympic')     return 'olympic';
+      if (/^(trad|t$)/.test(v)||v==='traditional') return 'traditional';
+      if (/^(exh|ex$|e$)/.test(v)||v==='exhibition') return 'exhibition';
+      return 'both';
+    }
+    function normWC(s) {
+      const v = (s||'').trim().replace(/lbs?|kg/i,'').trim().toUpperCase();
+      if (wcs.includes(v)) return v;
+      if (v==='HWT'||v==='HEAVYWEIGHT'||v==='UNL'||v==='UNLIM') return wcs[wcs.length-1];
+      const n = parseInt(v);
+      if (n) { const match = wcs.find(w => parseInt(w)===n); if (match) return match; }
+      return null;
+    }
+
+    const results = [];
+    dataLines.forEach(line => {
+      // Strip surrounding quotes (CSV standard)
+      const parts = line.split(delim).map(p => p.trim().replace(/^["']|["']$/g,''));
+      let name = parts[nameIdx] || '';
+      let wcRaw  = parts[wcIdx]  || '';
+      let discRaw = parts[discIdx] || '';
+
+      // Skip Google Forms timestamp-only rows or empty names
+      if (!name || /^\d{4}[-/]/.test(name)) return;
+
+      // If no explicit weight column, try to extract weight from name field
+      // e.g. "John Smith 154" or "John Smith 154lbs"
+      if (!wcRaw) {
+        const m = name.match(/\b(\d{2,3})\s*(?:lbs?|kg)?\b/);
+        if (m) { wcRaw = m[1]; name = name.replace(m[0], '').trim().replace(/[-–,]+$/, '').trim(); }
+      }
+
+      const wc = normWC(wcRaw);
+      if (!name) return;
+      results.push({ name, wc, disc: normDisc(discRaw) });
+    });
+    return results;
+  }
+
+  function _previewImport(raw, el) {
+    if (!el) return;
+    const m = _meet(); if (!m) return;
+    const rows = _parseImportText(raw.trim(), _wcs(m.gender));
+    if (!rows.length) { el.textContent = ''; return; }
+    el.style.color = 'var(--gold)';
+    el.textContent = `${rows.length} athlete${rows.length!==1?'s':''} detected`;
   }
 
   function confirmImportCSV() {
     const m = _meet(); if (!m) return;
     const schoolId = document.getElementById('hm-csv-school')?.value; if (!schoolId) return;
     const raw = (document.getElementById('hm-csv-data')?.value || '').trim();
-    if (!raw) { alert('Paste athlete data first.'); return; }
-    const wcs = _wcs(m.gender);
+    if (!raw) { alert('Paste or upload athlete data first.'); return; }
+    const wcs  = _wcs(m.gender);
+    const rows = _parseImportText(raw, wcs);
+    if (!rows.length) { alert('No athletes found — check the format and try again.'); return; }
 
-    function normDisc(s) {
-      const v = (s||'').trim().toLowerCase();
-      if (v==='olympic'||v==='oly'||v==='o') return 'olympic';
-      if (v==='traditional'||v==='trad'||v==='t') return 'traditional';
-      if (v==='exhibition'||v==='exh'||v==='ex'||v==='e') return 'exhibition';
-      return 'both';
-    }
-    function normWC(s) {
-      const v = (s||'').trim().toUpperCase();
-      if (wcs.includes(v)) return v;
-      const n = parseInt(v);
-      if (n) { const match = wcs.find(w => parseInt(w) === n); if (match) return match; }
-      return wcs[0];
-    }
-
-    const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !/^name[,\t]/i.test(l));
-    let added = 0, skipped = 0;
-    lines.forEach(line => {
-      const parts = line.split(',').map(p => p.trim());
-      const name = parts[0]; if (!name) return;
-      const wc   = normWC(parts[1]);
-      const disc = normDisc(parts[2]);
-      if (disc !== 'exhibition' && m.entries.filter(e => e.schoolId === schoolId && e.wc === wc && e.discipline !== 'exhibition').length >= 2) { skipped++; return; }
+    let added = 0, skipped = 0, noWC = 0;
+    rows.forEach(({ name, wc, disc }) => {
+      if (!wc) { noWC++; return; }
+      if (disc !== 'exhibition' && m.entries.filter(e => e.schoolId===schoolId && e.wc===wc && e.discipline!=='exhibition').length >= 2) { skipped++; return; }
       m.entries.push(_blankEntry(name, schoolId, wc, disc, null, null));
       added++;
     });
     _save(); closeModal(); renderMain();
-    showToast(skipped > 0 ? `${added} imported, ${skipped} skipped (weight class full)` : `${added} athlete${added!==1?'s':''} imported`);
+    const parts = [`${added} athlete${added!==1?'s':''} imported`];
+    if (skipped) parts.push(`${skipped} skipped (weight class full)`);
+    if (noWC)    parts.push(`${noWC} skipped (unrecognized weight class)`);
+    showToast(parts.join(' · '));
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -2513,8 +2615,9 @@ const HM = (() => {
         ${teamSummary}
       </body></html>`;
 
+    const filename = (m.name || 'LiftBuilder_Results').trim();
     if (window.liftbuilderApp?.exportPDF) {
-      window.liftbuilderApp.exportPDF(html)
+      window.liftbuilderApp.exportPDF(html, filename)
         .then(r => showToast(r?.success ? 'PDF saved.' : r?.error ? 'PDF failed: ' + r.error : 'PDF export cancelled.'))
         .catch(e => showToast('PDF export failed: ' + (e?.message || e || 'unknown error')));
     } else {
@@ -2883,8 +2986,9 @@ const HM = (() => {
         ${wcSections}
       </body></html>`;
 
+    const filename = (m.name || 'LiftBuilder_CompSheet').trim() + ' - Comp Sheet';
     if (window.liftbuilderApp?.exportPDF) {
-      window.liftbuilderApp.exportPDF(html)
+      window.liftbuilderApp.exportPDF(html, filename)
         .then(r => showToast(r?.success ? 'Comp sheets saved.' : r?.error ? 'PDF failed: '+r.error : 'Cancelled.'))
         .catch(e => showToast('PDF failed: '+(e?.message||e||'unknown')));
     } else {
@@ -3085,13 +3189,13 @@ const HM = (() => {
     newMeet, openMeet, deleteMeet,
     // Setup
     autoSaveSetup, saveSetupAndProceed,
-    openAddSchoolModal, saveSchool, removeSchool,
+    openAddSchoolModal, saveSchool, removeSchool, setHomeSchool,
     _filterSchools, _setClassFilter, _setRegionFilter, _setDistrictFilter,
     _toggleSchool, _selectAllVisible,
     openAddEntryModal, saveEntry, removeEntry,
     openEditEntryModal, saveEditEntry,
     openImportRosterModal, confirmImportRoster,
-    openImportCSVModal, confirmImportCSV,
+    openImportCSVModal, confirmImportCSV, _loadImportFile, _previewImport,
     backToList, backToSetup, backToWeighIn,
     // Weigh-in
     saveWeighIn, saveOpen, proceedToCompetition,

@@ -469,14 +469,15 @@ app.whenReady().then(() => {
   ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/SoftMetapod/liftbuilder/releases/latest'));
   ipcMain.handle('get-version',        () => app.getVersion());
 
-  ipcMain.handle('export-pdf', async (event, html) => {
+  ipcMain.handle('export-pdf', async (event, { html, filename } = {}) => {
     if (!_isMainWindow(event)) return { success: false };
     const { dialog, BrowserWindow: BW } = require('electron');
     const fs = require('fs');
     const senderWin = BW.fromWebContents(event.sender) || mainWindow;
+    const safeName = (filename || 'LiftBuilder_Results').replace(/[/\\:*?"<>|]+/g, '_');
     const { filePath, canceled } = await dialog.showSaveDialog(senderWin, {
       title: 'Save Results PDF',
-      defaultPath: 'LiftBuilder_Results.pdf',
+      defaultPath: safeName + '.pdf',
       filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
     });
     if (canceled || !filePath) return { success: false };

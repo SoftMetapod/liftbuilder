@@ -2953,6 +2953,12 @@ function _syncCfg() {
   try { return JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || 'null') || null; } catch { return null; }
 }
 
+function _normalizeUrl(raw) {
+  const u = (raw || '').trim().replace(/\/$/, '');
+  if (!u) return '';
+  return /^https?:\/\//i.test(u) ? u : 'http://' + u;
+}
+
 function _renderSyncBtn() {
   const btn  = document.getElementById('sync-btn');
   const icon = document.getElementById('sync-icon');
@@ -2965,9 +2971,9 @@ function _renderSyncBtn() {
   else                                { icon.textContent = '☁'; icon.style.color = 'var(--muted)';  btn.title = 'Cloud Sync'; }
 }
 
-async function _syncPush() {
+async function _syncPush(showFeedback = false) {
   const cfg = _syncCfg(); if (!cfg) return;
-  _syncStatus = 'syncing'; _renderSyncBtn();
+  _syncStatus = 'syncing';
   try {
     const savedAt = Date.now();
     const res = await fetch(`${cfg.url}/api/sync`, {
@@ -2979,10 +2985,18 @@ async function _syncPush() {
         savedAt,
       }),
     });
-    if (res.ok) { localStorage.setItem(SYNC_TS_KEY, String(savedAt)); _syncStatus = 'ok'; }
-    else        { _syncStatus = 'error'; }
-  } catch { _syncStatus = 'error'; }
-  _renderSyncBtn();
+    if (res.ok) {
+      localStorage.setItem(SYNC_TS_KEY, String(savedAt));
+      _syncStatus = 'ok';
+      if (showFeedback) showToast('↑ Data uploaded to server');
+    } else {
+      _syncStatus = 'error';
+      if (showFeedback) showToast('Sync failed — server returned ' + res.status);
+    }
+  } catch (e) {
+    _syncStatus = 'error';
+    if (showFeedback) showToast('Sync error: ' + e.message);
+  }
 }
 
 function _scheduleSyncPush() {
@@ -2990,32 +3004,38 @@ function _scheduleSyncPush() {
   _syncPushTimer = setTimeout(_syncPush, 2000);
 }
 
-async function _syncPull() {
+async function _syncPull(showFeedback = false) {
   const cfg = _syncCfg(); if (!cfg) return;
-  _syncStatus = 'syncing'; _renderSyncBtn();
+  _syncStatus = 'syncing';
   try {
     const res = await fetch(`${cfg.url}/api/sync`, { headers: { 'X-Api-Key': cfg.apiKey } });
-    if (!res.ok) { _syncStatus = 'error'; _renderSyncBtn(); return; }
+    if (!res.ok) { _syncStatus = 'error'; if (showFeedback) showToast('Sync failed — server returned ' + res.status); return; }
     const data      = await res.json();
     const localTs   = parseInt(localStorage.getItem(SYNC_TS_KEY) || '0', 10);
     const serverTs  = data.savedAt || 0;
+    const hasLocal  = !!localStorage.getItem(STORAGE_KEY);
     if (serverTs > localTs) {
       if (data.liftbuilder_v1)           localStorage.setItem(STORAGE_KEY, data.liftbuilder_v1);
       if (data.liftbuilder_hosted_meets) localStorage.setItem('liftbuilder_hosted_meets', data.liftbuilder_hosted_meets);
       localStorage.setItem(SYNC_TS_KEY, String(serverTs));
       loadState(); render();
-    } else if (localTs > serverTs && localTs > 0) {
-      await _syncPush(); return;
+      if (showFeedback) showToast('↓ Data pulled from server');
+    } else if (hasLocal && serverTs <= localTs) {
+      await _syncPush(showFeedback); return;
+    } else {
+      if (showFeedback) showToast('✓ Already up to date');
     }
     _syncStatus = 'ok';
-  } catch { _syncStatus = 'error'; }
-  _renderSyncBtn();
+  } catch (e) {
+    _syncStatus = 'error';
+    if (showFeedback) showToast('Sync error: ' + e.message);
+  }
 }
 
 function openSyncSettings() { openSettings(); }
 
 async function testSyncConn() {
-  const url    = (document.getElementById('sync-url')?.value || '').trim().replace(/\/$/, '');
+  const url    = _normalizeUrl(document.getElementById('sync-url')?.value || '');
   const apiKey = (document.getElementById('sync-key')?.value || '').trim();
   const el     = document.getElementById('sync-test-result');
   if (!url || !apiKey) { el.style.color = '#E07070'; el.textContent = 'Enter a URL and API key first.'; return; }
@@ -3028,7 +3048,7 @@ async function testSyncConn() {
 }
 
 function saveSyncCfg() {
-  const url    = (document.getElementById('sync-url')?.value || '').trim().replace(/\/$/, '');
+  const url    = _normalizeUrl(document.getElementById('sync-url')?.value || '');
   const apiKey = (document.getElementById('sync-key')?.value || '').trim();
   if (!url || !apiKey) { alert('Both a URL and API key are required.'); return; }
   localStorage.setItem(SYNC_CFG_KEY, JSON.stringify({ url, apiKey }));
@@ -3044,7 +3064,7 @@ function clearSyncCfg() {
 }
 
 function syncNow() {
-  _syncPull();
+  _syncPull(true);
 }
 
 // ═══════════════════════════════════════════════════
@@ -5769,7 +5789,8 @@ function openSettings() {
       <div id="sync-test-result" style="font-size:12px;min-height:16px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-outline" onclick="testSyncConn()" style="font-size:12px;padding:5px 12px;">Test Connection</button>
-        ${cfg ? `<button class="btn btn-outline" onclick="syncNow()" style="font-size:12px;padding:5px 12px;">↻ Sync Now</button>` : ''}
+        ${cfg ? `<button class="btn btn-outline" onclick="syncNow()" style="font-size:12px;padding:5px 12px;">↓ Pull from Server</button>` : ''}
+        ${cfg ? `<button class="btn btn-outline" onclick="_syncPush(true)" style="font-size:12px;padding:5px 12px;">↑ Upload to Server</button>` : ''}
         <button class="btn btn-gold" onclick="saveSyncCfg()" style="font-size:12px;padding:5px 12px;">Save</button>
         ${cfg ? `<button class="btn btn-danger" onclick="clearSyncCfg()" style="font-size:12px;padding:5px 12px;">Disconnect</button>` : ''}
       </div>
