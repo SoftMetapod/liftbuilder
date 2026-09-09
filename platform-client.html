@@ -695,8 +695,8 @@ function render(){
   const isOlyE = e => e.discipline==='both'||e.discipline==='olympic';
   const isTrdE = e => e.discipline==='both'||e.discipline==='traditional';
   const isExE  = e => e.discipline==='exhibition';
-  const oElig  = m.entries.filter(isOlyE);
-  const tElig  = m.entries.filter(isTrdE);
+  const oElig  = pEntries.filter(isOlyE);
+  const tElig  = pEntries.filter(isTrdE);
   const N      = (m.schools||[]).length;
   const pts    = _teamPoints(N);
 
@@ -717,9 +717,9 @@ function render(){
     return `<span class="att att-pending">${att.declared}</span>`;
   }
 
-  const usedWcs = wcs.filter(wc=>m.entries.some(e=>e.wc===wc));
+  const usedWcs = wcs.filter(wc=>pEntries.some(e=>e.wc===wc));
   document.getElementById('scoreboard').innerHTML = usedWcs.map(wc=>{
-    const grp=m.entries.filter(e=>e.wc===wc).map(e=>({
+    const grp=pEntries.filter(e=>e.wc===wc).map(e=>({
       e,
       oTot: isOlyE(e)||isExE(e) ? _olympicTotal(e) : 0,
       tTot: isTrdE(e)||isExE(e) ? _traditionalTotal(e) : 0,

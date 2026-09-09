@@ -26,9 +26,13 @@ body{background:var(--dark);color:var(--white);font-family:'Barlow',Arial,sans-s
 
 /* ── Platform bar ── */
 #platform-bar{display:flex;gap:10px;padding:10px 20px;background:var(--dark2);border-bottom:1px solid var(--dark3);overflow-x:auto;flex-shrink:0;}
-.plat-chip{background:var(--dark3);border:1px solid var(--dark4);border-radius:6px;padding:8px 12px;min-width:170px;flex-shrink:0;}
+.plat-chip{background:var(--dark3);border:1px solid var(--dark4);border-radius:6px;padding:8px 12px;min-width:170px;flex-shrink:0;cursor:pointer;transition:border-color .15s,background .15s;}
+.plat-chip:hover{border-color:var(--gold-a30);background:var(--dark4);}
 .plat-chip.live{border-color:var(--gold-a30);}
 .plat-chip.done{border-color:var(--green);}
+.plat-chip.active{background:var(--gold-a15);border-color:var(--gold);}
+#all-chip{background:var(--dark3);border:1px solid var(--dark4);border-radius:6px;padding:8px 12px;flex-shrink:0;cursor:pointer;font-family:'Barlow Condensed',Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--muted);display:flex;align-items:center;transition:border-color .15s;}
+#all-chip:hover,#all-chip.active{border-color:var(--gold);color:var(--gold);}
 .plat-num  {font-family:'Barlow Condensed',Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;margin-bottom:4px;}
 .plat-phase{font-size:13px;font-weight:600;margin-bottom:2px;}
 .plat-lifter{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
@@ -148,6 +152,7 @@ body{background:var(--dark);color:var(--white);font-family:'Barlow',Arial,sans-s
 const _meetToken = new URLSearchParams(location.search).get('pin') || '';
 const socket     = io({ auth: { token: _meetToken } });
 let _meet = null;
+let _platformFilter = null; // null = show all, number = show only that platform
 
 const STATUS_LABEL = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench', complete:'Complete' };
 const LIFT_LABEL   = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench' };
@@ -262,6 +267,8 @@ function buildWcTable(wc, entries, oPtsMap, tPtsMap){
   </div>`;
 }
 
+function setFilter(pNum) { _platformFilter = pNum; render(); }
+
 socket.on('connect',    ()=>{ document.getElementById('conn-badge').textContent='LIVE';    document.getElementById('conn-badge').className='conn-badge ok'; });
 socket.on('disconnect', ()=>{ document.getElementById('conn-badge').textContent='OFFLINE'; document.getElementById('conn-badge').className='conn-badge off'; });
 socket.on('state-update', (meetState)=>{ _meet=meetState; render(); });
@@ -278,7 +285,7 @@ function render(){
   if((m.numPlatforms||0)>1){
     platBar.style.display='';
     const connected = m._connectedPlatforms||[];
-    platBar.innerHTML = Array.from({length:m.numPlatforms},(_,i)=>{
+    const chipsHtml = Array.from({length:m.numPlatforms},(_,i)=>{
       const pNum=i+1, ps=m.platformStates?.[pNum]||{}, pSt=ps.status||m.status;
       const isDone=pSt==='complete', isConn=connected.includes(pNum);
       const pEntries=m.entries.filter(e=>e.platform===pNum), ciSet=new Set(ps.checkedIn||[]);
@@ -314,11 +321,13 @@ function render(){
           :'<div class="plat-lifter" style="color:#444;">Waiting…</div>'}`;
       }
 
-      return `<div class="plat-chip ${isDone?'done':isConn?'live':''}">
+      const isActive = _platformFilter === pNum;
+      return `<div class="plat-chip ${isDone?'done':isConn?'live':''}${isActive?' active':''}" onclick="setFilter(${pNum})">
         <div class="plat-num"><span style="color:${dotColor}">●</span> PLATFORM ${pNum}</div>
         ${cardBody}
       </div>`;
     }).join('');
+    platBar.innerHTML = `<div id="all-chip" class="${_platformFilter===null?'active':''}" onclick="setFilter(null)">ALL</div>` + chipsHtml;
   } else {
     platBar.style.display='none';
   }
@@ -340,8 +349,9 @@ function render(){
     let p=0; grp.forEach(r=>{ if(r.tot>0&&p<pts.length) tPtsMap[r.e.id]={pts:pts[p],place:++p}; });
   });
 
-  const usedWcs = wcs.filter(wc=>m.entries.some(e=>e.wc===wc));
-  const leftHtml = usedWcs.map(wc=>buildWcTable(wc, m.entries, oPtsMap, tPtsMap)).join('');
+  const visibleEntries = _platformFilter !== null ? m.entries.filter(e=>e.platform===_platformFilter) : m.entries;
+  const usedWcs = wcs.filter(wc=>visibleEntries.some(e=>e.wc===wc));
+  const leftHtml = usedWcs.map(wc=>buildWcTable(wc, visibleEntries, oPtsMap, tPtsMap)).join('');
   document.getElementById('left').innerHTML = leftHtml || '<div style="color:#444;padding:40px;text-align:center;font-size:14px;">No entries yet</div>';
 
   // Team scores
