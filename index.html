@@ -4293,7 +4293,10 @@ function buildRosterHTML() {
   const rows = filtered.length ? filtered.map((a)=>{
     const realIdx = state.roster.athletes.indexOf(a);
     const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
-    const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${esc(String(a[f.id]||''))||'—'}</td>`).join('');
+    const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>{
+      if(f.type==='number') return `<td onclick="rosterInlineEdit(this,${realIdx},'${f.id}')" title="Click to edit" style="text-align:center;color:var(--muted);padding:7px 10px;cursor:pointer;font-weight:600;" onmouseenter="this.style.background='rgba(128,128,128,.08)'" onmouseleave="this.style.background=''">${a[f.id]||0}</td>`;
+      return `<td style="text-align:center;color:var(--muted);padding:7px 10px;">${esc(String(a[f.id]||''))||'—'}</td>`;
+    }).join('');
     const athKey = a.id||a.name;
     const isSel = _rosterSel.has(athKey);
     return `<tr style="border-bottom:1px solid var(--dark3);background:${isSel?'var(--gold-a15)':''};" onmouseenter="this.style.background='${isSel?'var(--gold-a15)':'var(--dark2)'}'" onmouseleave="this.style.background='${isSel?'var(--gold-a15)':''}'">
@@ -4305,9 +4308,9 @@ function buildRosterHTML() {
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.wc)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.gradYear)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.team)||'—'}</td>
-      <td style="text-align:center;padding:7px 10px;color:#C9A84C;font-weight:600;">${a.snatch||0}</td>
-      <td style="text-align:center;padding:7px 10px;color:#3A86D4;font-weight:600;">${a.cj||0}</td>
-      <td style="text-align:center;padding:7px 10px;color:#C06060;font-weight:600;">${a.bench||0}</td>
+      <td onclick="rosterInlineEdit(this,${realIdx},'snatch')" title="Click to edit" style="text-align:center;padding:7px 10px;color:#C9A84C;font-weight:600;cursor:pointer;" onmouseenter="this.style.background='rgba(201,168,76,.08)'" onmouseleave="this.style.background=''">${a.snatch||0}</td>
+      <td onclick="rosterInlineEdit(this,${realIdx},'cj')"     title="Click to edit" style="text-align:center;padding:7px 10px;color:#3A86D4;font-weight:600;cursor:pointer;" onmouseenter="this.style.background='rgba(58,134,212,.08)'"  onmouseleave="this.style.background=''">${a.cj||0}</td>
+      <td onclick="rosterInlineEdit(this,${realIdx},'bench')"  title="Click to edit" style="text-align:center;padding:7px 10px;color:#C06060;font-weight:600;cursor:pointer;" onmouseenter="this.style.background='rgba(192,96,96,.08)'"   onmouseleave="this.style.background=''">${a.bench||0}</td>
       ${extraCells}
       <td style="text-align:center;padding:7px 10px;color:#5EC08A;font-weight:700;">${ot||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:#A07FD4;font-weight:700;">${tt||'—'}</td>
@@ -4359,6 +4362,26 @@ function rosterSortBy(field) {
   if(_rosterSort.field===field) _rosterSort.dir*=-1;
   else { _rosterSort.field=field; _rosterSort.dir=1; }
   renderMain();
+}
+
+function rosterInlineEdit(cell, athleteIdx, field) {
+  const ath = state.roster.athletes[athleteIdx]; if (!ath) return;
+  const color = field==='snatch'?'#C9A84C':field==='cj'?'#3A86D4':field==='bench'?'#C06060':'var(--muted)';
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.min = '0'; inp.value = ath[field] || '';
+  inp.style.cssText = `width:64px;background:var(--dark1);color:${color};border:1px solid ${color};border-radius:3px;padding:2px 4px;text-align:center;font-size:13px;font-weight:600;outline:none;`;
+  cell.innerHTML = ''; cell.style.padding = '4px 10px'; cell.onclick = null;
+  cell.appendChild(inp); inp.focus(); inp.select();
+  function save() {
+    const val = parseFloat(inp.value) || 0;
+    ath[field] = val; saveState(); renderMain();
+  }
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { renderMain(); }
+    e.stopPropagation();
+  });
 }
 
 function athleteFormHTML(a={}) {
