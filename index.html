@@ -136,6 +136,29 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 
 /* ── Modal ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:flex;align-items:center;justify-content:center;z-index:300;}
+
+/* ── Onboarding: first-launch tour + contextual tips ── */
+#tour-overlay{position:fixed;inset:0;z-index:9000;}
+#tour-overlay.centered{background:rgba(0,0,0,0.68);}
+#tour-spotlight{position:fixed;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.68);transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;pointer-events:none;}
+#tour-overlay[hidden],#tip-card[hidden],#tour-spotlight[hidden]{display:none!important;}
+#tour-card,#tip-card{position:fixed;background:var(--dark2);border:1px solid var(--gold);border-radius:8px;padding:16px 18px;width:290px;max-width:calc(100vw - 32px);box-shadow:0 8px 30px rgba(0,0,0,0.6);font-size:13px;line-height:1.5;color:var(--light);}
+#tour-card{z-index:9001;}
+#tip-card{z-index:250;}
+.ob-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--gold);letter-spacing:.5px;margin-bottom:6px;}
+.ob-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;}
+.ob-progress{font-size:11px;color:var(--muted);}
+.ob-btn{font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;border-radius:4px;padding:5px 11px;cursor:pointer;border:1px solid var(--dark3);background:transparent;color:var(--muted);}
+.ob-btn:hover{border-color:var(--gold);color:var(--gold);}
+.ob-btn.primary{background:var(--gold);color:var(--black);border-color:var(--gold);}
+.ob-btn.primary:hover{background:var(--gold-light);color:var(--black);}
+.ob-close{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;}
+.ob-close:hover{color:var(--white);}
+.ob-arrow{position:absolute;width:0;height:0;border:9px solid transparent;}
+.ob-arrow.at-left{left:-18px;border-right-color:var(--gold);}
+.ob-arrow.at-right{right:-18px;border-left-color:var(--gold);}
+.ob-arrow.at-top{top:-18px;border-bottom-color:var(--gold);}
+.ob-arrow.at-bottom{bottom:-18px;border-top-color:var(--gold);}
 .modal{background:var(--dark);border:1px solid var(--dark3);border-radius:10px;padding:1.6rem;width:min(560px,92vw);max-height:88vh;overflow-y:auto;}
 .modal h3{font-family:'Barlow Condensed',sans-serif;font-size:21px;font-weight:700;margin-bottom:1.1rem;}
 .form-field{margin-bottom:.9rem;}
@@ -289,6 +312,32 @@ select option{background:#232323;}
   <div class="modal" id="modal-body"></div>
 </div>
 </div><!-- /app-shell -->
+
+<!-- Onboarding tour -->
+<div id="tour-overlay" hidden>
+  <div id="tour-spotlight"></div>
+  <div id="tour-card">
+    <div class="ob-arrow"></div>
+    <div class="ob-title" id="tour-title"></div>
+    <div id="tour-body"></div>
+    <div class="ob-footer">
+      <span class="ob-progress" id="tour-progress"></span>
+      <div style="display:flex;gap:6px;">
+        <button class="ob-btn" onclick="_tourDone()">Skip</button>
+        <button class="ob-btn primary" id="tour-next" onclick="_tourNext()">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Contextual tip -->
+<div id="tip-card" hidden>
+  <div class="ob-arrow"></div>
+  <button class="ob-close" onclick="_dismissTip()" title="Dismiss">✕</button>
+  <div id="tip-text" style="padding-right:14px;"></div>
+  <div class="ob-footer" style="justify-content:flex-end;">
+    <button class="ob-btn primary" onclick="_dismissTip()">Got it</button>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -613,6 +662,7 @@ function renderProgToolbar() {
       <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--white);white-space:nowrap;">Athlete Roster</span>
       <span style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);margin-left:8px;white-space:nowrap;">${count} athlete${count!==1?'s':''}</span>
       <div class="prog-toolbar-sep"></div>
+      <input type="search" id="roster-search" value="${esc(_rosterFilter.q||'')}" placeholder="🔍 Search athletes…" oninput="rosterSearch(this.value)" style="${selStyle}width:190px;">
       ${genders.length ? `<select onchange="_rosterFilter.gender=this.value;renderMain()" style="${selStyle}"><option value="">All genders</option>${genders.map(g=>`<option value="${g}" ${_rosterFilter.gender===g?'selected':''}>${g}</option>`).join('')}</select>` : ''}
       ${wcs.length ? `<select onchange="_rosterFilter.wc=this.value;renderMain()" style="${selStyle}"><option value="">All weight classes</option>${wcs.map(w=>`<option value="${w}" ${_rosterFilter.wc===w?'selected':''}>${w}</option>`).join('')}</select>` : ''}
       ${teams.length ? `<select onchange="_rosterFilter.team=this.value;renderMain()" style="${selStyle}"><option value="">Varsity &amp; JV</option>${teams.map(t=>`<option value="${t}" ${_rosterFilter.team===t?'selected':''}>${t}</option>`).join('')}</select>` : ''}
@@ -836,6 +886,7 @@ function toggleProgSection() {
 function renderHeaderActions() { /* no-op — handled by renderHeader */ }
 
 function renderMain() {
+  _hideTip();
   const area = document.getElementById('main-area');
   if (state.activeTab==='program')   { area.innerHTML=buildProgramHTML(); }
   else if (state.activeTab==='volume')  { area.innerHTML=buildVolumeHTML(); initVolumeCharts(); }
@@ -904,7 +955,7 @@ function buildProgramHTML() {
       const movParts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${esc(m.name)}</span>`).join('');
       let groupParts='';
       if(ex.complexGroups&&ex.complexGroups.length>1){
-        groupParts=ex.complexGroups.map(cg=>`<span style="display:block;font-size:11px;color:var(--muted);padding-left:12px;">${cg.sets} set${cg.sets!==1?'s':''} @ ${cg.intensity>0?cg.intensity+'%':'BW'}</span>`).join('');
+        groupParts=ex.complexGroups.map(cg=>`<span style="display:block;font-size:11px;color:var(--muted);padding-left:12px;">${cg.sets} set${cg.sets!==1?'s':''} @ ${cg.intensity>0?fmtPct(cg.intensity,cg.intensityHigh||0):'BW'}</span>`).join('');
       }
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${esc(ex.name)||'Complex'}</span>${movParts}${groupParts}`;
     } else if(ex.setGroups && ex.setGroups.length>1) {
@@ -939,6 +990,7 @@ function buildProgramHTML() {
             :(isAMRAP?`${ex.reps}<span style="color:#E85252;font-weight:700;">+</span>`:`${ex.reps}`));
     const pctDisplay=ex.isSuperset?`<span style="font-size:10px;color:var(--muted);">—</span>`
       :ex.isComplex&&ex.complexGroups&&ex.complexGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
+      :ex.isComplex?fmtPct(ex.complexGroups?.[0]?.intensity??ex.intensity??0,ex.complexGroups?.[0]?.intensityHigh??ex.intensityHigh??0)
       :isHeavySingle?`<span style="font-size:10px;color:var(--gold);">build</span>`
       :ex.useRPE?(ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`:`<span style="color:#E85252;">RPE ${sg0?.rpe||8}</span>`)
       :ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
@@ -1739,7 +1791,9 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
           <div style="display:flex;align-items:flex-start;margin-bottom:5px;">
             ${catDot(ex.category)}<div>
               <span style="${nameStyle}">${esc(displayName)}</span>
-              <span style="margin-left:10px;color:#555;font-size:9pt;">${ex.sets||0} sets @ ${fmtLoad(ex)}</span>
+              <span style="margin-left:10px;color:#555;font-size:9pt;">${(ex.complexGroups||[]).length>1
+                ? ex.complexGroups.map(cg=>`${cg.sets}×@${cg.intensity>0?pct(cg.intensity,cg.intensityHigh||0):'BW'}`).join(', ')
+                : `${ex.sets||0} sets @ ${pct((ex.complexGroups||[])[0]?.intensity??ex.intensity??0,(ex.complexGroups||[])[0]?.intensityHigh??ex.intensityHigh??0)}`}</span>
             </div>
           </div>
           ${mvRows}
@@ -2343,7 +2397,7 @@ function openAddExercise(preDay, section='main') {
   _exNote='';
   _scheme='normal';
   _setGroups=[{sets:3,reps:3,seconds:30,intensity:75,intensityHigh:0,rpe:8}];
-  _complexGroups=[{sets:3,intensity:70}];
+  _complexGroups=[{sets:3,intensity:70,intensityHigh:0}];
   _movements=[{name:'',reps:1,category:'snatch'},{name:'',reps:1,category:'other'}];
   _supersetSets=3;
   _supersetExercises=[{name:'',category:'squat',reps:5,seconds:30,intensity:75,intensityHigh:0,useTime:false,rpe:8,useRPE:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false,rpe:8,useRPE:false}];
@@ -2514,7 +2568,7 @@ function renderExModeBody() {
       <div class="vol-preview" style="margin-top:.75rem;"><span>Total volume</span><strong id="vol-preview-val">—</strong></div>`;
     renderSupersetRows();
   } else {
-    if(!_complexGroups.length) _complexGroups=[{sets:3,intensity:70}];
+    if(!_complexGroups.length) _complexGroups=[{sets:3,intensity:70,intensityHigh:0}];
     body.innerHTML=`
       <div class="form-field"><label>Complex name <span style="font-weight:400;color:var(--muted);font-size:10px;">(auto-generated if blank)</span></label>
         <input type="text" id="m-name" placeholder="e.g. Snatch Complex" autofocus>
@@ -2622,15 +2676,17 @@ function removeMovement(i) {
 function renderComplexGroups() {
   const container=document.getElementById('complex-groups-container');
   if(!container) return;
-  const header=`<div style="display:grid;grid-template-columns:1fr 1fr 28px;gap:6px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
-    <span>Sets</span><span>%1RM (0=BW)</span><span></span>
+  const header=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;padding:0 0 4px;font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.8px;text-transform:uppercase;">
+    <span>Sets</span><span>Low% (0=BW)</span><span>High% <span style="font-weight:400;opacity:.6;">(opt)</span></span><span></span>
   </div>`;
   const rows=_complexGroups.map((cg,i)=>`
-    <div style="display:grid;grid-template-columns:1fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center;">
       <input type="number" value="${cg.sets}" min="1" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
         oninput="_complexGroups[${i}].sets=parseInt(this.value)||1;updateComplexVol()">
       <input type="number" value="${cg.intensity}" min="0" max="115" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:6px 4px;font-size:14px;"
         oninput="_complexGroups[${i}].intensity=parseInt(this.value)||0;updateComplexVol()">
+      <input type="number" value="${cg.intensityHigh||''}" min="0" max="115" placeholder="—" style="width:100%;text-align:center;background:var(--dark2);border:1px solid var(--dark3);color:var(--muted);border-radius:4px;padding:6px 4px;font-size:14px;"
+        oninput="_complexGroups[${i}].intensityHigh=parseInt(this.value)||0">
       ${_complexGroups.length>1?`<button class="complex-remove-btn" onclick="removeComplexGroup(${i})">✕</button>`:'<div></div>'}
     </div>`).join('');
   container.innerHTML=header+rows;
@@ -2639,7 +2695,7 @@ function renderComplexGroups() {
 
 function addComplexGroup() {
   const last=_complexGroups[_complexGroups.length-1]||{sets:1,intensity:70};
-  _complexGroups.push({sets:last.sets,intensity:last.intensity});
+  _complexGroups.push({sets:last.sets,intensity:last.intensity,intensityHigh:0});
   renderComplexGroups();
 }
 
@@ -2748,9 +2804,9 @@ function saveExercise() {
     const filled=_movements.filter(m=>m.name.trim());
     if(!filled.length){alert('Add at least one movement to the complex.');return;}
     const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
-    const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0}));
+    const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0,intensityHigh:parseInt(cg.intensityHigh)||0}));
     const totalSets=groups.reduce((s,cg)=>s+cg.sets,0);
-    const wInt=groups.reduce((s,cg)=>s+cg.intensity*cg.sets,0);
+    const wInt=groups.reduce((s,cg)=>{const lo=cg.intensity||0;const hi=cg.intensityHigh||lo;return s+((lo+hi)/2)*cg.sets;},0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
     const volume=totalSets*repsPerSet;
     const rawName=document.getElementById('m-name').value.trim();
@@ -2765,6 +2821,7 @@ function saveExercise() {
       reps: volume,
       repsPerSet,
       intensity: avgIntensity,
+      intensityHigh: groups.length===1?groups[0].intensityHigh:0,
       volume,
       category: topCat
     };
@@ -2826,7 +2883,7 @@ function openEditExercise(day, idx, section='main') {
     ? ex.movements.map(m=>({name:m.name,reps:m.reps,category:m.category||'other'}))
     : [{name:'',reps:1,category:'other'}];
   _complexGroups=ex.isComplex
-    ? (ex.complexGroups?ex.complexGroups.map(cg=>({...cg})):[{sets:ex.sets||1,intensity:ex.intensity||0}])
+    ? (ex.complexGroups?ex.complexGroups.map(cg=>({...cg})):[{sets:ex.sets||1,intensity:ex.intensity||0,intensityHigh:ex.intensityHigh||0}])
     : [{sets:3,intensity:70}];
   _setGroups=ex.isComplex||ex.isSuperset?[]
     :(ex.setGroups?ex.setGroups.map(sg=>({...sg,intensityHigh:sg.intensityHigh||0,rpe:sg.rpe||8})):[{sets:ex.sets||1,reps:ex.reps||1,seconds:ex.seconds||30,intensity:ex.intensity||0,intensityHigh:0,rpe:8}]);
@@ -2890,14 +2947,14 @@ function saveEditExercise(day, idx, section='main') {
     const filled=_movements.filter(m=>m.name.trim());
     if(!filled.length){alert('Add at least one movement to the complex.');return;}
     const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
-    const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0}));
+    const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0,intensityHigh:parseInt(cg.intensityHigh)||0}));
     const totalSets=groups.reduce((s,cg)=>s+cg.sets,0);
-    const wInt=groups.reduce((s,cg)=>s+cg.intensity*cg.sets,0);
+    const wInt=groups.reduce((s,cg)=>{const lo=cg.intensity||0;const hi=cg.intensityHigh||lo;return s+((lo+hi)/2)*cg.sets;},0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
     const volume=totalSets*repsPerSet;
     const rawName=document.getElementById('m-name').value.trim();
     const autoName=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
-    ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),complexGroups:groups,sets:totalSets,reps:volume,repsPerSet,intensity:avgIntensity,volume,category};
+    ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),complexGroups:groups,sets:totalSets,reps:volume,repsPerSet,intensity:avgIntensity,intensityHigh:groups.length===1?groups[0].intensityHigh:0,volume,category};
   } else if(_exMode==='superset') {
     const filled=_supersetExercises.filter(se=>se.name.trim());
     if(filled.length<2){alert('Enter names for at least 2 exercises in the superset.');return;}
@@ -4242,29 +4299,33 @@ function buildLibraryHTML() {
 
 // Roster filter state
 let _libraryFilter = { search: '', category: '' };
-let _rosterFilter  = { gender:'', wc:'', team:'' };
+let _rosterFilter  = { gender:'', wc:'', team:'', q:'' };
 let _rosterSort    = { field:'name', dir:1 };
 let _rosterSel     = new Set(); // set of athlete names (keys) currently selected
+
+function _rosterMatches(a) {
+  const f = _rosterFilter;
+  if(f.gender && a.gender!==f.gender) return false;
+  if(f.wc && a.wc!==f.wc) return false;
+  if(f.team && a.team!==f.team) return false;
+  if(f.q) {
+    const q = f.q.trim().toLowerCase();
+    if(q && !String(a.name||'').toLowerCase().includes(q) && !String(a.team||'').toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+
+// Re-renders only the table so the search box in the toolbar keeps focus while typing.
+function rosterSearch(q) {
+  _rosterFilter.q = q;
+  if(state.activeTab==='roster') document.getElementById('main-area').innerHTML = buildRosterHTML();
+}
 
 function buildRosterHTML() {
   const athletes = state.roster.athletes || [];
   const fields   = rosterFields();
 
-  // Derive filter options
-  const genders = [...new Set(athletes.map(a=>a.gender).filter(Boolean))].sort();
-  const wcs     = [...new Set(athletes.map(a=>a.wc).filter(Boolean))].sort((a,b)=>{
-    if(a==='UNL') return 1; if(b==='UNL') return -1;
-    return parseInt(a)-parseInt(b);
-  });
-  const teams   = [...new Set(athletes.map(a=>a.team).filter(Boolean))].sort();
-
-  // Apply filters
-  let filtered = athletes.filter(a=>{
-    if(_rosterFilter.gender && a.gender!==_rosterFilter.gender) return false;
-    if(_rosterFilter.wc && a.wc!==_rosterFilter.wc) return false;
-    if(_rosterFilter.team && a.team!==_rosterFilter.team) return false;
-    return true;
-  });
+  let filtered = athletes.filter(_rosterMatches);
 
   // Sort
   filtered.sort((a,b)=>{
@@ -4321,7 +4382,7 @@ function buildRosterHTML() {
         <button onclick="deleteAthlete(${realIdx})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;">✕</button>
       </td>
     </tr>`;
-  }).join('') : `<tr><td colspan="99" style="padding:3rem;text-align:center;color:var(--muted);">No athletes match the current filter.</td></tr>`;
+  }).join('') : `<tr><td colspan="99" style="padding:3rem;text-align:center;color:var(--muted);">${athletes.length?`No athletes match ${_rosterFilter.q?`“${esc(_rosterFilter.q)}”`:'the current filter'}.`:'No athletes yet — use + Add Athlete or Import CSV to get started.'}</td></tr>`;
 
   const extraHeaders = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>sortBtn(f.id,f.label)).join('');
 
@@ -4761,13 +4822,7 @@ function rosterToggleOne(key, checked) {
 
 function rosterToggleAll(checked) {
   const athletes = state.roster.athletes||[];
-  const _rosterFilter_local = _rosterFilter;
-  const filtered = athletes.filter(a=>{
-    if(_rosterFilter_local.gender && a.gender!==_rosterFilter_local.gender) return false;
-    if(_rosterFilter_local.wc && a.wc!==_rosterFilter_local.wc) return false;
-    if(_rosterFilter_local.team && a.team!==_rosterFilter_local.team) return false;
-    return true;
-  });
+  const filtered = athletes.filter(_rosterMatches);
   if(checked) filtered.forEach(a=>_rosterSel.add(a.id||a.name));
   else filtered.forEach(a=>_rosterSel.delete(a.id||a.name));
   renderMain();
@@ -5637,6 +5692,43 @@ function withSave(fn) {
 // ═══════════════════════════════════════════════════
 //  DUPLICATE WEEK
 // ═══════════════════════════════════════════════════
+// Shifts every exercise in `days` by intAdj (% points, 0/BW entries untouched) and setsAdj (min 1 set).
+function applyWeekProgression(days, intAdj, setsAdj) {
+  const adjPct  = v => (intAdj !== 0 && (v||0) > 0) ? Math.round(Math.min(115, Math.max(0, v + intAdj)) * 10) / 10 : (v||0);
+  const adjSets = s => setsAdj !== 0 ? Math.max(1, (s||1) + setsAdj) : (s||1);
+  const midAvg  = groups => {
+    const total = groups.reduce((s,g)=>s+g.sets,0);
+    if (!total) return 0;
+    const w = groups.reduce((s,g)=>{const lo=g.intensity||0;const hi=g.intensityHigh||lo;return s+((lo+hi)/2)*g.sets;},0);
+    return Math.round(w/total);
+  };
+  Object.values(days).forEach(d => {
+    (d.exercises||[]).forEach(ex => {
+      if (ex.isComplex && ex.complexGroups) {
+        ex.complexGroups = ex.complexGroups.map(cg => ({...cg, sets:adjSets(cg.sets), intensity:adjPct(cg.intensity), intensityHigh:adjPct(cg.intensityHigh)}));
+        const totalSets  = ex.complexGroups.reduce((s,cg)=>s+cg.sets,0);
+        const repsPerSet = ex.repsPerSet || (ex.movements||[]).reduce((s,m)=>s+(m.reps||0),0);
+        ex.sets = totalSets;
+        ex.intensity = midAvg(ex.complexGroups);
+        ex.intensityHigh = ex.complexGroups.length===1 ? ex.complexGroups[0].intensityHigh : 0;
+        ex.volume = totalSets * repsPerSet;
+        ex.reps = ex.volume;
+      } else if (ex.isSuperset && ex.supersetExercises) {
+        ex.sets = adjSets(ex.sets);
+        ex.supersetExercises = ex.supersetExercises.map(se => se.useRPE ? se : {...se, intensity:adjPct(se.intensity), intensityHigh:adjPct(se.intensityHigh)});
+        const pctEx = ex.supersetExercises.filter(se=>!se.useRPE);
+        ex.intensity = pctEx.length ? Math.round(pctEx.reduce((s,se)=>s+(se.intensity||0),0)/pctEx.length) : 0;
+        ex.volume = ex.sets * ex.supersetExercises.filter(se=>!se.useRPE&&!se.useTime).reduce((s,se)=>s+(se.reps||0),0);
+      } else if (ex.setGroups && !ex.useRPE) {
+        ex.setGroups = ex.setGroups.map(sg => ({...sg, sets:adjSets(sg.sets), intensity:adjPct(sg.intensity), intensityHigh:adjPct(sg.intensityHigh)}));
+        ex.sets = ex.setGroups.reduce((s,sg)=>s+sg.sets,0);
+        ex.intensity = midAvg(ex.setGroups);
+        ex.volume = ex.useTime ? 0 : ex.setGroups.reduce((s,sg)=>s+sg.sets*(sg.reps||0),0);
+      }
+    });
+  });
+}
+
 function openDuplicateWeek() {
   const ws = weekNums();
   if (!ws.length) { alert('No weeks to duplicate.'); return; }
@@ -5702,25 +5794,7 @@ function saveDuplicateWeek() {
   const daysCopy = JSON.parse(JSON.stringify(srcWd.days));
   // Apply progression rules
   if (intAdj !== 0 || setsAdj !== 0) {
-    Object.values(daysCopy).forEach(d => {
-      (d.exercises||[]).forEach(ex => {
-        if (ex.setGroups && !ex.isComplex && !ex.isSuperset && !ex.useRPE) {
-          ex.setGroups = ex.setGroups.map(sg => {
-            const newSets = setsAdj !== 0 ? Math.max(1, (sg.sets||1) + setsAdj) : sg.sets;
-            const newInt = (intAdj !== 0 && (sg.intensity||0) > 0)
-              ? Math.round(Math.min(115, Math.max(0, (sg.intensity||0) + intAdj)) * 10) / 10 : sg.intensity;
-            const newHi = (intAdj !== 0 && (sg.intensityHigh||0) > 0)
-              ? Math.round(Math.min(115, (sg.intensityHigh + intAdj)) * 10) / 10 : sg.intensityHigh;
-            return {...sg, sets:newSets, intensity:newInt, intensityHigh:newHi||0};
-          });
-          const totalSets = ex.setGroups.reduce((s,sg)=>s+sg.sets,0);
-          const wInt = ex.setGroups.reduce((s,sg)=>{const lo=sg.intensity||0;const hi=sg.intensityHigh||lo;return s+((lo+hi)/2)*sg.sets;},0);
-          ex.intensity = totalSets>0 ? Math.round(wInt/totalSets) : 0;
-          ex.sets = totalSets;
-          ex.volume = ex.useTime ? 0 : ex.setGroups.reduce((s,sg)=>s+sg.sets*(sg.reps||0),0);
-        }
-      });
-    });
+    applyWeekProgression(daysCopy, intAdj, setsAdj);
   }
   prog().weeks[destW] = { note, phase, days: daysCopy };
   state.currentWeek = destW;
@@ -5819,6 +5893,11 @@ function openSettings() {
       </div>
     </div>`;
     })()}
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Help</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;margin-bottom:1.5rem;">
+      <div><div style="font-size:14px;font-weight:600;color:var(--white);">Tutorial</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Replay the guided tour and reset all first-use tips</div></div>
+      <button onclick="resetTutorial()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">🎓 Replay Tutorial</button>
+    </div>
     <div style="height:1px;background:var(--dark3);margin-bottom:1rem;"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid rgba(192,57,43,0.3);border-radius:8px;background:rgba(192,57,43,0.05);">
       <div><div style="font-size:14px;font-weight:600;color:#E07070;">Clear All Data</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Delete everything and start fresh — cannot be undone</div></div>
@@ -5847,7 +5926,112 @@ function checkFerpaNotice() {
 function acknowledgeFerpa() {
   localStorage.setItem(FERPA_KEY, '1');
   closeModal();
+  _maybeStartTour();
 }
+
+// ── Onboarding: first-launch tour + contextual tips ──
+const _OB_KEY = 'liftbuilder_onboarding';
+function _obState() { try { return JSON.parse(localStorage.getItem(_OB_KEY) || '{}'); } catch { return {}; } }
+function _obSet(k, v) { const s = _obState(); s[k] = v; localStorage.setItem(_OB_KEY, JSON.stringify(s)); }
+
+const _TOUR_STEPS = [
+  { sel: null, title: 'Welcome to LiftBuilder', text: 'Let\'s take a quick tour of the key features. It only takes a moment.' },
+  { sel: '#sidebar', place: 'right', title: 'Navigation',
+    text: 'The sidebar is your main navigation. Switch between your Programs, Roster, Schedule, Host Meet, and more.' },
+  { sel: '.nav-item[onclick="switchTab(\'hostmeet\')"]', place: 'right', title: 'Host Meet',
+    text: 'Use Host Meet to run a live competition — set up platforms, connect judges and displays, and show a live scoreboard.' },
+  { sel: 'button[onclick="openSettings()"]', place: 'above', title: 'Settings',
+    text: 'Open Settings to configure cloud sync, show or hide tools, or replay this tutorial anytime.' },
+];
+let _tourStep = -1;
+
+function _maybeStartTour() { if (!_obState().tourDone) _startTour(); }
+function _startTour() { _hideTip(); _tourStep = 0; _showTourStep(); }
+function _tourNext() { _tourStep++; if (_tourStep >= _TOUR_STEPS.length) _tourDone(); else _showTourStep(); }
+function _tourDone() {
+  document.getElementById('tour-overlay').hidden = true;
+  _tourStep = -1;
+  _obSet('tourDone', true);
+}
+function _showTourStep() {
+  const step = _TOUR_STEPS[_tourStep];
+  const el = step.sel ? document.querySelector(step.sel) : null;
+  if (step.sel && !el) { _tourNext(); return; } // target not on screen (e.g. tool hidden) — skip it
+  const overlay = document.getElementById('tour-overlay');
+  overlay.hidden = false;
+  overlay.classList.toggle('centered', !el);
+  document.getElementById('tour-title').textContent = step.title;
+  document.getElementById('tour-body').textContent = step.text;
+  document.getElementById('tour-progress').textContent = `${_tourStep + 1} of ${_TOUR_STEPS.length}`;
+  document.getElementById('tour-next').textContent = _tourStep === _TOUR_STEPS.length - 1 ? 'Done' : 'Next →';
+  _placeCard(document.getElementById('tour-card'), document.getElementById('tour-spotlight'), el, step.place);
+}
+function resetTutorial() {
+  localStorage.removeItem(_OB_KEY);
+  closeModal();
+  _startTour();
+}
+
+// Positions a card next to `el` (or centres it when el is null) and aims its arrow at el's centre.
+function _placeCard(card, spotlight, el, place) {
+  const arrow = card.querySelector('.ob-arrow');
+  arrow.className = 'ob-arrow';
+  arrow.style.top = ''; arrow.style.left = '';
+  if (!el) {
+    if (spotlight) spotlight.hidden = true;
+    card.style.left = '50%'; card.style.top = '50%'; card.style.transform = 'translate(-50%,-50%)';
+    return;
+  }
+  const r = el.getBoundingClientRect();
+  if (spotlight) {
+    const pad = 6;
+    spotlight.hidden = false;
+    spotlight.style.top = (r.top - pad) + 'px';  spotlight.style.left = (r.left - pad) + 'px';
+    spotlight.style.width = (r.width + pad * 2) + 'px'; spotlight.style.height = (r.height + pad * 2) + 'px';
+  }
+  card.style.transform = '';
+  const gap = 16, cw = card.offsetWidth, ch = card.offsetHeight;
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let top, left;
+  if (place === 'right')      { left = r.right + gap;     top = cy - ch / 2; }
+  else if (place === 'left')  { left = r.left - gap - cw; top = cy - ch / 2; }
+  else if (place === 'above') { top = r.top - gap - ch;   left = cx - cw / 2; }
+  else                        { top = r.bottom + gap;     left = cx - cw / 2; }
+  left = Math.max(12, Math.min(left, window.innerWidth - cw - 12));
+  top  = Math.max(12, Math.min(top,  window.innerHeight - ch - 12));
+  card.style.left = left + 'px'; card.style.top = top + 'px';
+  const side = place === 'right' ? 'at-left' : place === 'left' ? 'at-right' : place === 'above' ? 'at-bottom' : 'at-top';
+  arrow.classList.add(side);
+  if (side === 'at-left' || side === 'at-right') arrow.style.top  = Math.max(10, Math.min(cy - top - 9, ch - 28)) + 'px';
+  else                                            arrow.style.left = Math.max(10, Math.min(cx - left - 9, cw - 28)) + 'px';
+}
+
+let _activeTip = null; // { key, sel, place }
+function _showTip(key, sel, text, place = 'below') {
+  if (_obState()[key] || _tourStep >= 0) return;
+  const el = document.querySelector(sel);
+  if (!el) return;
+  _activeTip = { key, sel, place };
+  const card = document.getElementById('tip-card');
+  document.getElementById('tip-text').textContent = text;
+  card.hidden = false;
+  _placeCard(card, null, el, place);
+}
+function _hideTip() {
+  const card = document.getElementById('tip-card');
+  if (card) card.hidden = true;
+  _activeTip = null;
+}
+function _dismissTip() { if (_activeTip) _obSet(_activeTip.key, true); _hideTip(); }
+
+window.addEventListener('resize', () => {
+  if (_tourStep >= 0) _showTourStep();
+  if (_activeTip) {
+    const el = document.querySelector(_activeTip.sel);
+    if (el) _placeCard(document.getElementById('tip-card'), null, el, _activeTip.place); else _hideTip();
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && _tourStep >= 0) _tourDone(); });
 
 // ── Init ──
 function initApp() {
@@ -5859,8 +6043,24 @@ function initApp() {
   }
   render();
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); } });
+  document.addEventListener('keydown', e => {
+    const modalOpen = document.getElementById('overlay').style.display === 'flex';
+    if (e.key === 'Escape' && modalOpen) { closeModal(); return; }
+    // Exercise modal: Enter in any input saves (Tab already walks the set-group cells in order)
+    if (e.key === 'Enter' && modalOpen && document.getElementById('ex-mode-body')) {
+      if (e.target?.tagName !== 'INPUT' || e.shiftKey || e.isComposing) return;
+      const primary = [...document.querySelectorAll('#modal-body .modal-actions .btn-gold')].pop();
+      if (primary) { e.preventDefault(); primary.click(); }
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n' && !modalOpen && state.activeTab === 'program' && prog()) {
+      e.preventDefault(); openAddExercise();
+    }
+  });
   document.addEventListener('click', () => { document.querySelectorAll('[id^="day-add-menu-"],[id^="lib-ex-menu-"],#roster-dl-menu').forEach(el => el.style.display='none'); });
   checkFerpaNotice();
+  // Fresh installs see the tour right after acknowledging the FERPA notice (see acknowledgeFerpa)
+  if (localStorage.getItem(FERPA_KEY)) setTimeout(_maybeStartTour, 500);
   _syncPull();
   // Auto-save on any state change — patch key mutating functions
   const _origSaveNewWeek = saveNewWeek;

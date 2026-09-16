@@ -11,8 +11,10 @@ contextBridge.exposeInMainWorld('liftbuilderApp', {
   exportPDF:            (html, filename) => ipcRenderer.invoke('export-pdf', { html, filename }),
   exportProgramPDF:     (opts)     => ipcRenderer.invoke('export-program-pdf', opts),
   // Platform server
-  startPlatformServer:  (meet)     => ipcRenderer.invoke('start-platform-server', meet),
+  startPlatformServer:  (meet, opts) => ipcRenderer.invoke('start-platform-server', meet, opts || {}),
   stopPlatformServer:   ()         => ipcRenderer.invoke('stop-platform-server'),
+  getRecoverableMeet:     ()       => ipcRenderer.invoke('get-recoverable-meet'),
+  discardRecoverableMeet: ()       => ipcRenderer.invoke('discard-recoverable-meet'),
   getServerInfo:        ()         => ipcRenderer.invoke('get-server-info'),
   syncPlatformState:    (meet)     => ipcRenderer.invoke('sync-platform-state', meet),
   onPlatformStateSync:  (cb)       => ipcRenderer.on('platform-state-sync', (_e, s) => cb(s)),

@@ -2,6 +2,7 @@ const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path   = require('path');
 const http   = require('http');
 const os     = require('os');
+const fs     = require('fs');
 const crypto = require('crypto');
 
 let mainWindow   = null;
@@ -15,6 +16,38 @@ let _sessionToken      = null; // random token required by all socket clients
 const PLATFORM_PORT    = 3847;
 const _socketPlatforms   = new Map(); // socket.id → pNum
 const _connectedPlatforms = new Set(); // currently connected pNums
+
+// ── Crash/restart persistence ──────────────────────────────────────────────
+// The live meet lives in memory; mirror it to disk on every change so a crash or
+// accidental quit mid-meet can be resumed with the same PIN (already-open judge
+// tablets and displays then reconnect on their own).
+const SNAPSHOT_FILE = path.join(app.getPath('userData'), 'live-meet.json');
+let _persistTimer = null;
+
+function _persistNow() {
+  if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null; }
+  try {
+    if (!_platformMeetState || !_httpServer) { fs.rmSync(SNAPSHOT_FILE, { force: true }); return; }
+    const tmp = SNAPSHOT_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ token: _sessionToken, savedAt: Date.now(), meetState: _platformMeetState }));
+    fs.renameSync(tmp, SNAPSHOT_FILE);
+  } catch (err) {
+    console.error('[persist]', err.message);
+  }
+}
+function _schedulePersist() {
+  if (!_persistTimer) _persistTimer = setTimeout(_persistNow, 250);
+}
+function _readSnapshot() {
+  try {
+    const s = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
+    return s?.meetState?.id ? s : null;
+  } catch { return null; }
+}
+function _deleteSnapshot() {
+  if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null; }
+  try { fs.rmSync(SNAPSHOT_FILE, { force: true }); } catch { /* nothing to delete */ }
+}
 
 function getLocalIP() {
   for (const nets of Object.values(os.networkInterfaces())) {
@@ -69,16 +102,19 @@ function _broadcast() {
   const state = { ..._platformMeetState, _connectedPlatforms: [..._connectedPlatforms] };
   _io?.emit('state-update', state);
   mainWindow?.webContents.send('platform-state-sync', state);
+  _schedulePersist();
 }
 
-async function startPlatformServer(meetState) {
-  stopPlatformServer();
+async function startPlatformServer(meetState, { resume = false } = {}) {
+  const snapshot = resume ? _readSnapshot() : null;
+  const resumed  = !!(snapshot && snapshot.meetState.id === meetState?.id);
+  stopPlatformServer({ keepSnapshot: resumed });
 
   const express      = require('express');
   const { Server }   = require('socket.io');
   const expressApp   = express();
   _httpServer        = http.createServer(expressApp);
-  _sessionToken      = String(Math.floor(100000 + Math.random() * 900000));
+  _sessionToken      = resumed && snapshot.token ? String(snapshot.token) : String(Math.floor(100000 + Math.random() * 900000));
 
   const localIP      = getLocalIP();
   const allowedOrigins = [
@@ -93,9 +129,11 @@ async function startPlatformServer(meetState) {
     if (socket.handshake.auth?.token === _sessionToken) return next();
     next(new Error('Unauthorized'));
   });
-  _platformMeetState = JSON.parse(JSON.stringify(meetState));
-  _platformMeetState.timerEndMs    = null;
-  _platformMeetState.timerPausedRem = null;
+  _platformMeetState = JSON.parse(JSON.stringify(resumed ? snapshot.meetState : meetState));
+  if (!resumed) {
+    _platformMeetState.timerEndMs    = null;
+    _platformMeetState.timerPausedRem = null;
+  }
 
   // Initialise platformStates for any platform that doesn't have one yet
   if (!_platformMeetState.platformStates) _platformMeetState.platformStates = {};
@@ -107,20 +145,30 @@ async function startPlatformServer(meetState) {
     }
   }
 
+  // On Linux/Windows AppImage/NSIS, HTML files are served via Express which uses
+  // raw OS filesystem calls and cannot read from inside .asar archives.
+  // asarUnpack places them in app.asar.unpacked/ so Express can reach them.
+  const SERVE_ROOT = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked')
+    : __dirname;
+
   // Static files
-  expressApp.use('/vendor', express.static(path.join(__dirname, 'vendor')));
+  expressApp.use('/vendor', express.static(path.join(SERVE_ROOT, 'vendor')));
   expressApp.get('/platform/:num', (_req, res) =>
-    res.sendFile(path.join(__dirname, 'platform-client.html')));
+    res.sendFile(path.join(SERVE_ROOT, 'platform-client.html')));
   expressApp.get('/display/:num', (_req, res) =>
-    res.sendFile(path.join(__dirname, 'platform-display.html')));
+    res.sendFile(path.join(SERVE_ROOT, 'platform-display.html')));
   expressApp.get('/scoreboard', (_req, res) =>
-    res.sendFile(path.join(__dirname, 'platform-scoreboard.html')));
+    res.sendFile(path.join(SERVE_ROOT, 'platform-scoreboard.html')));
   expressApp.get('/referee/:num/:seat', (_req, res) =>
-    res.sendFile(path.join(__dirname, 'referee.html')));
+    res.sendFile(path.join(SERVE_ROOT, 'referee.html')));
   expressApp.get('/', (_req, res) => res.redirect('/platform/1'));
 
   // ── Socket events ──────────────────────────────────────────────────────────
   _io.on('connection', (socket) => {
+    // New scoreboards/displays would otherwise sit blank until the next state change
+    socket.emit('state-update', { ..._platformMeetState, _connectedPlatforms: [..._connectedPlatforms] });
+
     socket.on('join', (rawNum) => {
       const pNum = parseInt(rawNum);
       if (!_validPNum(pNum)) return;
@@ -402,12 +450,16 @@ async function startPlatformServer(meetState) {
   return new Promise((resolve, reject) => {
     _httpServer.listen(PLATFORM_PORT, (err) => {
       if (err) return reject(err);
-      resolve({ port: PLATFORM_PORT, ip: getLocalIP(), token: _sessionToken });
+      _persistNow();
+      if (resumed) _broadcast(); // push the restored results back to the renderer
+      resolve({ port: PLATFORM_PORT, ip: getLocalIP(), token: _sessionToken, resumed });
     });
   });
 }
 
-function stopPlatformServer() {
+// keepSnapshot: leave the on-disk copy so the meet can be resumed (used on quit, not on an explicit Stop)
+function stopPlatformServer({ keepSnapshot = false } = {}) {
+  if (keepSnapshot) _persistNow(); else _deleteSnapshot();
   _io?.close();
   _io = null;
   _httpServer?.close();
@@ -547,10 +599,10 @@ app.whenReady().then(() => {
   });
 
   // ── Platform server IPC ────────────────────────────────────────────────────
-  ipcMain.handle('start-platform-server', async (event, meetState) => {
+  ipcMain.handle('start-platform-server', async (event, meetState, opts = {}) => {
     if (!_isMainWindow(event)) return { success: false };
     try {
-      const info = await startPlatformServer(meetState);
+      const info = await startPlatformServer(meetState, { resume: !!opts?.resume });
       return { success: true, ...info };
     } catch (err) {
       return { success: false, error: String(err.message) };
@@ -560,6 +612,18 @@ app.whenReady().then(() => {
   ipcMain.handle('stop-platform-server', (event) => {
     if (!_isMainWindow(event)) return { success: false };
     stopPlatformServer();
+    return { success: true };
+  });
+
+  ipcMain.handle('get-recoverable-meet', (event) => {
+    if (!_isMainWindow(event) || _httpServer?.listening) return null;
+    const s = _readSnapshot();
+    return s ? { id: s.meetState.id, name: s.meetState.name || '', savedAt: s.savedAt || null } : null;
+  });
+
+  ipcMain.handle('discard-recoverable-meet', (event) => {
+    if (!_isMainWindow(event)) return { success: false };
+    _deleteSnapshot();
     return { success: true };
   });
 
@@ -576,6 +640,7 @@ app.whenReady().then(() => {
       _platformMeetState = JSON.parse(JSON.stringify(meetState));
       _platformMeetState.platformStates = savedPS;
       _io?.emit('state-update', _platformMeetState);
+      _schedulePersist();
     }
     return { success: true };
   });
@@ -685,6 +750,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  stopPlatformServer();
+  stopPlatformServer({ keepSnapshot: true });
   if (process.platform !== 'darwin') app.quit();
 });

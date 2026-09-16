@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "5.6.7",
+  "version": "5.6.9",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
@@ -20,6 +20,13 @@
     "appId": "com.liftbuilder.app",
     "productName": "LiftBuilder",
     "copyright": "Copyright © 2026 LiftBuilder",
+    "asarUnpack": [
+      "platform-client.html",
+      "platform-display.html",
+      "platform-scoreboard.html",
+      "referee.html",
+      "vendor/**"
+    ],
     "files": [
       "index.html",
       "host-meet.js",

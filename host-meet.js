@@ -96,6 +96,7 @@ const HM = (() => {
   let _lastLift           = null;  // last recorded result, shown on display while waiting
   let _platformActive       = false; // true when platform server is running
   let _platformInfo         = null;  // { ip, port, token }
+  let _syncListenerAttached = false; // ipcRenderer.on would otherwise stack a listener per start
   let _platformSyncLock     = false; // prevents circular sync loops
   let _connectedPlatforms   = [];    // pNums currently connected, from server broadcasts
   let _webSocket            = null;  // socket.io connection when running in web mode (no Electron)
@@ -287,12 +288,29 @@ const HM = (() => {
   // ══════════════════════════════════════════════════════════════════════════
   function buildHTML() {
     _load();
+    setTimeout(_showViewTip, 80); // wait for the returned HTML to be in the DOM
     if (_view === 'setup')       return _buildSetupHTML();
     if (_view === 'weighin')     return _buildWeighInHTML();
     if (_view === 'competition') return _buildCompetitionHTML();
     if (_view === 'results')     return _buildResultsHTML();
     if (_view === 'stats')       return _buildStatsHTML();
     return _buildListHTML();
+  }
+
+  // First-use tips for each view (defined in index.html; no-op outside the app)
+  function _showViewTip() {
+    if (typeof window._showTip !== 'function') return;
+    const m = _meet();
+    if (_view === 'list') {
+      window._showTip('tipHostMeet', 'button[onclick="HM.newMeet()"]',
+        'Create your first meet here. You\'ll add the schools, enter athletes, and set up platforms.', 'below');
+    } else if (_view === 'setup') {
+      window._showTip('tipSetup', '#hm-name',
+        'Start by filling in the meet details. You need at least 2 schools and 1 athlete before you can proceed to weigh-in.', 'below');
+    } else if (_view === 'competition' && m && m.numPlatforms > 0) {
+      window._showTip('tipCompetition', 'button[onclick="HM.startPlatforms()"]',
+        'Click Platforms to start the local server. Judges, platform tablets, and the scoreboard connect using the address and PIN shown on screen.', 'below');
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -421,7 +439,7 @@ const HM = (() => {
           </div>
           <div class="form-field">
             <label>Platforms</label>
-            <select id="hm-num-platforms" onchange="HM.autoSaveSetup()">
+            <select id="hm-num-platforms" onchange="HM.autoSaveSetup();renderMain()">
               <option value="0" ${!m.numPlatforms?'selected':''}>Single Platform</option>
               ${[2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}" ${m.numPlatforms===n?'selected':''}>${n} Platforms</option>`).join('')}
             </select>
@@ -475,6 +493,19 @@ const HM = (() => {
   // ══════════════════════════════════════════════════════════════════════════
   //  WEIGH-IN VIEW
   // ══════════════════════════════════════════════════════════════════════════
+  // { limit, over, next } when an athlete weighed in above their class, else null (HWT/UNL have no limit)
+  function _overLimit(e, wcs) {
+    const limit = parseFloat(e.wc);
+    if (e.weighIn === null || isNaN(limit) || e.weighIn <= limit) return null;
+    const next = wcs[wcs.indexOf(e.wc) + 1] || null;
+    return { limit, over: Math.round((e.weighIn - limit) * 10) / 10, next };
+  }
+  function _overLimitHTML(e, wcs) {
+    const o = _overLimit(e, wcs);
+    if (!o) return '';
+    return `⚠ ${o.over} lbs over the ${o.limit} limit${o.next ? ` — moves to ${o.next}${/^\d/.test(o.next) ? ' lbs' : ''}` : ''}`;
+  }
+
   function _buildWeighInHTML() {
     const m = _meet();
     if (!m) { _view = 'list'; return _buildListHTML(); }
@@ -489,6 +520,7 @@ const HM = (() => {
       const rows = entries.map(e => {
         const school     = m.schools.find(s => s.id === e.schoolId);
         const weighed    = e.weighIn !== null;
+        const over       = !!_overLimit(e, wcs);
         const needSnatch = e.discipline === 'both' || e.discipline === 'olympic' || e.discipline === 'exhibition';
         const needBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
         return `<tr style="border-bottom:1px solid var(--dark3);">
@@ -500,11 +532,12 @@ const HM = (() => {
             <div style="display:flex;align-items:center;gap:6px;">
               <input type="number" id="wi-${e.id}" value="${e.weighIn !== null ? e.weighIn : ''}"
                 min="50" max="500" step="0.1" placeholder="—"
-                style="width:75px;background:var(--dark);color:var(--white);border:1px solid ${weighed?'var(--gold-a50)':'var(--dark3)'};border-radius:4px;padding:5px 7px;font-size:14px;font-family:'Barlow Condensed',sans-serif;"
+                style="width:75px;background:var(--dark);color:var(--white);border:1px solid ${over?'#E07070':weighed?'var(--gold-a50)':'var(--dark3)'};border-radius:4px;padding:5px 7px;font-size:14px;font-family:'Barlow Condensed',sans-serif;"
                 oninput="HM.saveWeighIn('${e.id}')">
               <span style="font-size:11px;color:var(--muted);">lbs</span>
-              <span id="hm-wi-check-${e.id}" style="color:${weighed?'#5EC08A':'#555'};font-size:${weighed?'15':'12'}px;">${weighed?'✓':'—'}</span>
+              <span id="hm-wi-check-${e.id}" style="color:${over?'#E07070':weighed?'#5EC08A':'#555'};font-size:${weighed?'15':'12'}px;">${over?'⚠':weighed?'✓':'—'}</span>
             </div>
+            <div id="hm-wi-over-${e.id}" style="font-size:11px;color:#E07070;margin-top:4px;min-height:0;">${_overLimitHTML(e, wcs)}</div>
           </td>
           <td style="padding:9px 12px;">
             <div style="display:flex;flex-direction:column;gap:5px;">
@@ -1781,9 +1814,11 @@ const HM = (() => {
     const hasTab = lines.some(l => l.includes('\t'));
     const delim  = hasTab ? '\t' : ',';
 
-    // Check for header row (CSV with column names, e.g. Google Forms export)
-    const firstLower = lines[0].toLowerCase().replace(/[^a-z,\t]/g, '');
-    const hasHeader  = /name|athlete|weight|discipline|event/.test(firstLower);
+    // Check for header row (CSV with column names, e.g. Google Forms export).
+    // "weight"/"class" alone isn't enough — "Bob Jones, Heavyweight" is a data row.
+    const first     = lines[0].toLowerCase();
+    const hasHeader = /\b(name|athlete|timestamp|discipline|event)\b/.test(first)
+      || (/weight|class/.test(first) && !/\d/.test(first) && !/\b(hwt|unl|heavyweight|unlimited)\b/.test(first));
 
     let nameIdx = 0, wcIdx = 1, discIdx = 2;
     let dataLines = lines;
@@ -1881,14 +1916,18 @@ const HM = (() => {
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
     const val = parseFloat(document.getElementById('wi-' + entryId)?.value);
     e.weighIn = isNaN(val) || val <= 0 ? null : val;
+    const wcs  = _wcs(m.gender);
+    const over = !!_overLimit(e, wcs);
     const input = document.getElementById('wi-' + entryId);
-    if (input) input.style.borderColor = e.weighIn !== null ? 'var(--gold-a50)' : 'var(--dark3)';
+    if (input) input.style.borderColor = over ? '#E07070' : e.weighIn !== null ? 'var(--gold-a50)' : 'var(--dark3)';
     const check = document.getElementById('hm-wi-check-' + entryId);
     if (check) {
-      check.textContent = e.weighIn !== null ? '✓' : '—';
-      check.style.color    = e.weighIn !== null ? '#5EC08A' : '#555';
+      check.textContent = over ? '⚠' : e.weighIn !== null ? '✓' : '—';
+      check.style.color    = over ? '#E07070' : e.weighIn !== null ? '#5EC08A' : '#555';
       check.style.fontSize = e.weighIn !== null ? '15px'   : '12px';
     }
+    const msg = document.getElementById('hm-wi-over-' + entryId);
+    if (msg) msg.textContent = _overLimitHTML(e, wcs);
     _save();
     const weighed = m.entries.filter(x => x.weighIn !== null).length;
     const allDone = weighed === m.entries.length && m.entries.length > 0;
@@ -1913,6 +1952,12 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     if (m.entries.some(e => e.weighIn === null)) {
       alert('All athletes must be weighed in before starting competition.'); return;
+    }
+    const wcs  = _wcs(m.gender);
+    const over = m.entries.filter(e => _overLimit(e, wcs));
+    if (over.length) {
+      const list = over.map(e => `• ${e.name} — ${e.weighIn} lbs in the ${e.wc} class`).join('\n');
+      if (!confirm(`${over.length} athlete${over.length!==1?'s':''} weighed in over the class limit:\n${list}\n\nEdit their weight class in Setup, or begin the competition anyway?`)) return;
     }
     if (m.status === 'weigh-in') {
       m.entries.forEach(e => {
@@ -2653,7 +2698,7 @@ const HM = (() => {
   }
 
   // ── Platform server ─────────────────────────────────────────────────────────
-  async function startPlatforms() {
+  async function startPlatforms(opts = {}) {
     const m = _meet(); if (!m) return;
     autoSaveSetup();
     // Initialise platformStates for each platform
@@ -2667,14 +2712,17 @@ const HM = (() => {
 
     if (window.liftbuilderApp?.startPlatformServer) {
       // ── Electron path ──
-      const result = await window.liftbuilderApp.startPlatformServer(m);
+      if (!_syncListenerAttached) {
+        window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
+        _syncListenerAttached = true;
+      }
+      const result = await window.liftbuilderApp.startPlatformServer(m, { resume: !!opts.resume });
       if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
       _platformActive = true;
       _platformInfo   = { ip: result.ip, port: result.port, token: result.token || '' };
-      window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
       _syncTimer();
       renderMain();
-      showToast(`Platforms live at ${result.ip}:${result.port}`);
+      showToast(`${result.resumed ? 'Meet resumed — platforms' : 'Platforms'} live at ${result.ip}:${result.port}`);
     } else {
       // ── Web path ──
       try {
@@ -2697,6 +2745,45 @@ const HM = (() => {
 
   function copyLink(url) {
     navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => showToast('Copy failed — check browser permissions'));
+  }
+
+  // ── Crash recovery ───────────────────────────────────────────────────────────
+  // The main process snapshots the live meet to disk on every change; if LiftBuilder
+  // closed while platforms were running, offer to pick up where it left off.
+  async function _checkRecovery() {
+    const api = window.liftbuilderApp;
+    if (!api?.getRecoverableMeet || _platformActive) return;
+    let rec = null;
+    try { rec = await api.getRecoverableMeet(); } catch (e) { return; }
+    if (!rec) return;
+    _load();
+    const m = _meets.find(x => x.id === rec.id);
+    if (!m) { api.discardRecoverableMeet(); return; }
+    const body = document.getElementById('modal-body'); if (!body) return;
+    const safeName = String(m.name || 'Untitled meet').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    body.innerHTML = `
+      <h3 style="margin-bottom:.5rem;">Resume live meet?</h3>
+      <p style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem;">
+        <strong style="color:var(--white);">${safeName}</strong> was live when LiftBuilder last closed.
+        Resuming restores results, bar weights, and clocks, and lets connected judges and displays reconnect with the same PIN.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="HM._discardRecovery()">Dismiss</button>
+        <button class="btn btn-gold" onclick="HM._resumeRecovery('${m.id}')">📡 Resume platforms</button>
+      </div>`;
+    document.getElementById('overlay').style.display = 'flex';
+  }
+
+  function _discardRecovery() {
+    window.liftbuilderApp?.discardRecoverableMeet?.();
+    closeModal();
+  }
+
+  async function _resumeRecovery(id) {
+    closeModal();
+    if (typeof switchTab === 'function') switchTab('hostmeet');
+    openMeet(id);
+    await startPlatforms({ resume: true });
   }
 
   async function stopPlatforms() {
@@ -3195,7 +3282,9 @@ const HM = (() => {
     openAddEntryModal, saveEntry, removeEntry,
     openEditEntryModal, saveEditEntry,
     openImportRosterModal, confirmImportRoster,
-    openImportCSVModal, confirmImportCSV, _loadImportFile, _previewImport,
+    openImportCSVModal, confirmImportCSV, _loadImportFile, _previewImport, _parseImportText,
+    // Crash recovery
+    _checkRecovery, _resumeRecovery, _discardRecovery,
     backToList, backToSetup, backToWeighIn,
     // Weigh-in
     saveWeighIn, saveOpen, proceedToCompetition,
@@ -3221,3 +3310,6 @@ const HM = (() => {
     printScoreboard, openDisplayWindow,
   };
 })();
+
+// Offer to resume a meet that was live when the app last closed (Electron only; no-op on the web)
+setTimeout(() => HM._checkRecovery(), 700);
