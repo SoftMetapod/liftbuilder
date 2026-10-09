@@ -760,7 +760,7 @@ function renderProgToolbar() {
         ${usedCats.sort().map(c=>`<option value="${c}" ${_libraryFilter.category===c?'selected':''}>${CAT_META[c]?.label||c}</option>`).join('')}
       </select>
       <div class="prog-toolbar-sep"></div>
-      <button onclick="loadDefaultLibrary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;" title="Add the standard Olympic weightlifting exercise list">⬇ Load Defaults</button>
+      <button onclick="loadDefaultLibrary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;" title="Add the standard exercise list — Olympic lifts, squat/bench/pull variations, general strength &amp; conditioning, and warm-ups">⬇ Load Defaults</button>
       <div class="prog-toolbar-sep"></div>
       <button onclick="openAddToLibrary()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;padding:3px 8px;">+ Add Exercise</button>`;
 
@@ -885,19 +885,36 @@ function toggleProgSection() {
 
 function renderHeaderActions() { /* no-op — handled by renderHeader */ }
 
+// Re-rendering a view replaces #main-area's innerHTML, which normally resets scroll
+// to the top. This preserves both the outer area's scroll position and that of any
+// inner scrollable region tagged with [data-scroll-key] (e.g. the roster table).
+function _withScrollPreserved(area, renderFn) {
+  const outerScroll = area.scrollTop;
+  const innerEl = area.querySelector('[data-scroll-key]');
+  const innerScroll = innerEl ? innerEl.scrollTop : null;
+  renderFn();
+  area.scrollTop = outerScroll;
+  if (innerScroll != null) {
+    const newInner = area.querySelector('[data-scroll-key]');
+    if (newInner) newInner.scrollTop = innerScroll;
+  }
+}
+
 function renderMain() {
   _hideTip();
   const area = document.getElementById('main-area');
-  if (state.activeTab==='program')   { area.innerHTML=buildProgramHTML(); }
-  else if (state.activeTab==='volume')  { area.innerHTML=buildVolumeHTML(); initVolumeCharts(); }
-  else if (state.activeTab==='peaking') { area.innerHTML=buildPeakingHTML(); initPeakingChart(); }
-  else if (state.activeTab==='roster')  { area.innerHTML=buildRosterHTML(); }
-  else if (state.activeTab==='templates') { area.innerHTML=buildTemplatesHTML(); }
-  else if (state.activeTab==='library') { area.innerHTML=buildLibraryHTML(); }
-  else if (state.activeTab==='calendar') { area.innerHTML=buildCalendarHTML(); }
-  else if (state.activeTab==='calculator') { area.innerHTML=buildCalculatorHTML(); }
-  else if (state.activeTab==='meets') { area.innerHTML=buildMeetsHTML(); }
-  else if (state.activeTab==='hostmeet') { area.innerHTML=HM.buildHTML(); }
+  _withScrollPreserved(area, () => {
+    if (state.activeTab==='program')   { area.innerHTML=buildProgramHTML(); }
+    else if (state.activeTab==='volume')  { area.innerHTML=buildVolumeHTML(); initVolumeCharts(); }
+    else if (state.activeTab==='peaking') { area.innerHTML=buildPeakingHTML(); initPeakingChart(); }
+    else if (state.activeTab==='roster')  { area.innerHTML=buildRosterHTML(); }
+    else if (state.activeTab==='templates') { area.innerHTML=buildTemplatesHTML(); }
+    else if (state.activeTab==='library') { area.innerHTML=buildLibraryHTML(); }
+    else if (state.activeTab==='calendar') { area.innerHTML=buildCalendarHTML(); }
+    else if (state.activeTab==='calculator') { area.innerHTML=buildCalculatorHTML(); }
+    else if (state.activeTab==='meets') { area.innerHTML=buildMeetsHTML(); }
+    else if (state.activeTab==='hostmeet') { area.innerHTML=HM.buildHTML(); }
+  });
   renderProgToolbar();
   renderHeader();
 }
@@ -952,12 +969,14 @@ function buildProgramHTML() {
       }).join('');
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);">SUPERSET</span>${parts}`;
     } else if(ex.isComplex && ex.movements && ex.movements.length){
+      const rounds=ex.complexReps||1;
       const movParts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${esc(m.name)}</span>`).join('');
+      const roundsNote=rounds>1?`<span style="display:block;font-size:11px;color:var(--gold);padding-left:12px;">× ${rounds} rounds/set</span>`:'';
       let groupParts='';
       if(ex.complexGroups&&ex.complexGroups.length>1){
         groupParts=ex.complexGroups.map(cg=>`<span style="display:block;font-size:11px;color:var(--muted);padding-left:12px;">${cg.sets} set${cg.sets!==1?'s':''} @ ${cg.intensity>0?fmtPct(cg.intensity,cg.intensityHigh||0):'BW'}</span>`).join('');
       }
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${esc(ex.name)||'Complex'}</span>${movParts}${groupParts}`;
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${esc(ex.name)||'Complex'}</span>${movParts}${roundsNote}${groupParts}`;
     } else if(ex.setGroups && ex.setGroups.length>1) {
       const isLadder=ex.scheme==='ladder';
       const parts=ex.setGroups.map((sg,si)=>{
@@ -1778,28 +1797,44 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
       </tr>`;
     }
 
-    // Complex
+    // Complex — one row per set group (same pattern as wave/ladder sets below), so the
+    // load lands in the actual LOAD column instead of being buried in the name cell.
     if (ex.isComplex && (ex.movements || []).length) {
+      const complexRounds = ex.complexReps || 1;
+      const repsPerSet = ex.repsPerSet || (ex.movements || []).reduce((s,m)=>s+(parseInt(m.reps)||0),0);
+      const groups = (ex.complexGroups && ex.complexGroups.length)
+        ? ex.complexGroups
+        : [{ sets: ex.sets||0, intensity: ex.intensity||0, intensityHigh: ex.intensityHigh||0 }];
       const mvRows = (ex.movements || []).map(mv =>
         `<div style="display:flex;align-items:baseline;gap:6px;padding-left:15px;margin-bottom:2px;">
           <span style="color:#bbb;font-size:9pt;">&#8594;</span>
           <span style="font-size:9.5pt;">${esc(mv.reps)}&times;&nbsp;${esc(mv.name)}</span>
         </div>`
-      ).join('');
-      return `<tr style="${rowBg}">
-        <td colspan="4" style="padding:8px 10px;border-bottom:1px solid #eee;">
-          <div style="display:flex;align-items:flex-start;margin-bottom:5px;">
-            ${catDot(ex.category)}<div>
-              <span style="${nameStyle}">${esc(displayName)}</span>
-              <span style="margin-left:10px;color:#555;font-size:9pt;">${(ex.complexGroups||[]).length>1
-                ? ex.complexGroups.map(cg=>`${cg.sets}×@${cg.intensity>0?pct(cg.intensity,cg.intensityHigh||0):'BW'}`).join(', ')
-                : `${ex.sets||0} sets @ ${pct((ex.complexGroups||[])[0]?.intensity??ex.intensity??0,(ex.complexGroups||[])[0]?.intensityHigh??ex.intensityHigh??0)}`}</span>
-            </div>
-          </div>
-          ${mvRows}
-          ${ex.note ? `<div style="color:#888;font-style:italic;font-size:8pt;margin-top:4px;padding-left:15px;">${esc(ex.note)}</div>` : ''}
-        </td>
-      </tr>`;
+      ).join('') + (complexRounds > 1
+        ? `<div style="padding-left:15px;font-size:9pt;color:#a07020;font-weight:600;">&times; ${complexRounds} rounds/set</div>`
+        : '');
+      return groups.map((cg, i) => {
+        const load = cg.intensity > 0 ? pct(cg.intensity, cg.intensityHigh||0) : 'BW';
+        if (i === 0) {
+          return `<tr style="${rowBg}">
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;">
+              <div style="display:flex;align-items:flex-start;">${catDot(ex.category)}<div>
+                <span style="${nameStyle}">${esc(displayName)}</span>
+              </div></div>
+              ${mvRows}
+            </td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:#333;">${cg.sets}&times;${esc(repsPerSet)}</td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;white-space:nowrap;color:#1a5fa3;font-weight:600;">${load}</td>
+            <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #eee;color:#666;font-style:italic;font-size:8.5pt;">${ex.note ? esc(ex.note) : ''}</td>
+          </tr>`;
+        }
+        return `<tr style="${rowBg}">
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;"></td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:#333;">${cg.sets}&times;${esc(repsPerSet)}</td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:#1a5fa3;font-weight:600;">${load}</td>
+          <td style="padding:2px 10px 8px;border-bottom:1px solid #eee;"></td>
+        </tr>`;
+      }).join('');
     }
 
     // Standard exercise
@@ -1940,7 +1975,6 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
   }
 
   const weekPages   = wNums.map((wNum, i) => renderWeek(wNum, i === 0 && !isFullProg)).join('\n');
-  const footerLeft  = esc([p.name, p.org].filter(Boolean).join('  ·  '));
 
   return `<!DOCTYPE html>
 <html>
@@ -1948,7 +1982,7 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
   <meta charset="utf-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { size: letter; margin: 0.5in 0.5in 0.8in 0.5in; }
+    @page { size: letter; margin: 0.5in; }
     body {
       font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
       color: #1a1a1a;
@@ -1963,10 +1997,6 @@ function _buildProgramPDFHtml(wNums, inclMobility) {
 <body>
   ${coverHTML}
   ${weekPages}
-  <div style="position:fixed;bottom:0.25in;left:0;right:0;padding:5px 0.5in 0;font-size:7pt;color:#aaa;display:flex;justify-content:space-between;border-top:0.5px solid #ddd;">
-    <span>${footerLeft}</span>
-    <span>Generated by LiftBuilder</span>
-  </div>
 </body>
 </html>`;
 }
@@ -2395,6 +2425,7 @@ let _movements = []; // [{name, reps, category}]
 let _setGroups = []; // [{sets, reps, seconds, intensity, intensityHigh}] — for single exercises
 let _useTime = false; // true = time-based exercise (seconds per set instead of reps)
 let _complexGroups = []; // [{sets, intensity}] — set groups for complex exercises
+let _complexReps = 1; // how many times the full movement sequence repeats within one set
 let _scheme = 'normal'; // 'normal' | 'ladder' | 'amrap' | 'heavy_single'
 let _supersetExercises = []; // [{name, category, reps, seconds, intensity, intensityHigh, useTime, rpe, useRPE}]
 let _supersetSets = 3;
@@ -2414,6 +2445,7 @@ function openAddExercise(preDay, section='main') {
   _scheme='normal';
   _setGroups=[{sets:3,reps:3,seconds:30,intensity:75,intensityHigh:0,rpe:8}];
   _complexGroups=[{sets:3,intensity:70,intensityHigh:0}];
+  _complexReps=1;
   _movements=[{name:'',reps:1,category:'snatch'},{name:'',reps:1,category:'other'}];
   _supersetSets=3;
   _supersetExercises=[{name:'',category:'squat',reps:5,seconds:30,intensity:75,intensityHigh:0,useTime:false,rpe:8,useRPE:false},{name:'',category:'accessory',reps:10,seconds:30,intensity:0,intensityHigh:0,useTime:false,rpe:8,useRPE:false}];
@@ -2592,6 +2624,12 @@ function renderExModeBody() {
       <label style="display:block;font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:600;">Movements (in order)</label>
       <div id="complex-movements"></div>
       <button class="complex-add-btn" onclick="addMovement()">+ Add movement</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:.75rem;padding:8px 10px;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;">
+        <label style="font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;font-weight:600;white-space:nowrap;">Rounds per set</label>
+        <input type="number" id="complex-reps" min="1" max="20" value="${_complexReps}" style="width:52px;text-align:center;background:var(--black);border:1px solid var(--dark3);color:var(--white);border-radius:3px;padding:4px 6px;font-size:14px;"
+          oninput="_complexReps=parseInt(this.value)||1;autoNameComplex();updateComplexVol()">
+        <span style="font-size:11px;color:var(--muted);">× through the whole sequence, unbroken, before resting</span>
+      </div>
       <label style="display:block;font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:.75rem;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;font-weight:600;">Set Groups</label>
       <div id="complex-groups-container"></div>
       <button class="complex-add-btn" onclick="addComplexGroup()">+ Add set group</button>
@@ -2775,19 +2813,30 @@ function removeSetGroup(i) {
   renderSetGroups();
 }
 
+// Builds the auto-generated complex name, e.g. "1× Clean + 2× Front Squat" or,
+// when the whole sequence repeats within a set, "(1× Clean + 2× Front Squat) ×3"
+function _complexAutoName(movements, rounds) {
+  const seq = movements.map(m=>`${m.reps}× ${m.name}`).join(' + ');
+  return rounds>1 ? `(${seq}) ×${rounds}` : seq;
+}
+
 function autoNameComplex() {
   const nameEl=document.getElementById('m-name');
   if(!nameEl||nameEl.value.trim()) return; // don't overwrite if coach typed one
   const filled=_movements.filter(m=>m.name.trim());
-  if(filled.length>=2) nameEl.placeholder=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
+  if(filled.length>=2) nameEl.placeholder=_complexAutoName(filled, _complexReps||1);
 }
 
 function updateComplexVol() {
   const totalSets=_complexGroups.reduce((s,cg)=>s+(cg.sets||0),0);
-  const repsPerSet=_movements.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
+  const repsPerRound=_movements.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
+  const rounds=parseInt(_complexReps)||1;
+  const repsPerSet=repsPerRound*rounds;
   const total=totalSets*repsPerSet;
   const el=document.getElementById('vol-preview-val');
-  if(el) el.textContent=`${total} reps (${repsPerSet}/set × ${totalSets} sets)`;
+  if(el) el.textContent = rounds>1
+    ? `${total} reps (${repsPerRound}/round × ${rounds} rounds × ${totalSets} sets)`
+    : `${total} reps (${repsPerSet}/set × ${totalSets} sets)`;
 }
 
 function autoVol() {
@@ -2819,20 +2868,22 @@ function saveExercise() {
   if(_exMode==='complex') {
     const filled=_movements.filter(m=>m.name.trim());
     if(!filled.length){alert('Add at least one movement to the complex.');return;}
-    const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
+    const rounds=parseInt(_complexReps)||1;
+    const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0)*rounds;
     const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0,intensityHigh:parseInt(cg.intensityHigh)||0}));
     const totalSets=groups.reduce((s,cg)=>s+cg.sets,0);
     const wInt=groups.reduce((s,cg)=>{const lo=cg.intensity||0;const hi=cg.intensityHigh||lo;return s+((lo+hi)/2)*cg.sets;},0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
     const volume=totalSets*repsPerSet;
     const rawName=document.getElementById('m-name').value.trim();
-    const autoName=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
+    const autoName=_complexAutoName(filled, rounds);
     const topCat=document.getElementById('m-cat').value||filled[0].category||'other';
     ex={
       name: rawName||autoName,
       isComplex: true,
       movements: filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),
       complexGroups: groups,
+      complexReps: rounds,
       sets: totalSets,
       reps: volume,
       repsPerSet,
@@ -2901,6 +2952,7 @@ function openEditExercise(day, idx, section='main') {
   _complexGroups=ex.isComplex
     ? (ex.complexGroups?ex.complexGroups.map(cg=>({...cg})):[{sets:ex.sets||1,intensity:ex.intensity||0,intensityHigh:ex.intensityHigh||0}])
     : [{sets:3,intensity:70}];
+  _complexReps=ex.isComplex ? (ex.complexReps||1) : 1;
   _setGroups=ex.isComplex||ex.isSuperset?[]
     :(ex.setGroups?ex.setGroups.map(sg=>({...sg,intensityHigh:sg.intensityHigh||0,rpe:sg.rpe||8})):[{sets:ex.sets||1,reps:ex.reps||1,seconds:ex.seconds||30,intensity:ex.intensity||0,intensityHigh:0,rpe:8}]);
   _supersetSets=ex.isSuperset?(ex.sets||3):3;
@@ -2962,15 +3014,16 @@ function saveEditExercise(day, idx, section='main') {
   if(_exMode==='complex') {
     const filled=_movements.filter(m=>m.name.trim());
     if(!filled.length){alert('Add at least one movement to the complex.');return;}
-    const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0);
+    const rounds=parseInt(_complexReps)||1;
+    const repsPerSet=filled.reduce((s,m)=>s+(parseInt(m.reps)||0),0)*rounds;
     const groups=_complexGroups.map(cg=>({sets:parseInt(cg.sets)||1,intensity:parseInt(cg.intensity)||0,intensityHigh:parseInt(cg.intensityHigh)||0}));
     const totalSets=groups.reduce((s,cg)=>s+cg.sets,0);
     const wInt=groups.reduce((s,cg)=>{const lo=cg.intensity||0;const hi=cg.intensityHigh||lo;return s+((lo+hi)/2)*cg.sets;},0);
     const avgIntensity=totalSets>0?Math.round(wInt/totalSets):0;
     const volume=totalSets*repsPerSet;
     const rawName=document.getElementById('m-name').value.trim();
-    const autoName=filled.map(m=>`${m.reps}× ${m.name}`).join(' + ');
-    ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),complexGroups:groups,sets:totalSets,reps:volume,repsPerSet,intensity:avgIntensity,intensityHigh:groups.length===1?groups[0].intensityHigh:0,volume,category};
+    const autoName=_complexAutoName(filled, rounds);
+    ex={name:rawName||autoName,isComplex:true,movements:filled.map(m=>({name:m.name.trim(),reps:parseInt(m.reps)||1,category:m.category||'other'})),complexGroups:groups,complexReps:rounds,sets:totalSets,reps:volume,repsPerSet,intensity:avgIntensity,intensityHigh:groups.length===1?groups[0].intensityHigh:0,volume,category};
   } else if(_exMode==='superset') {
     const filled=_supersetExercises.filter(se=>se.name.trim());
     if(filled.length<2){alert('Enter names for at least 2 exercises in the superset.');return;}
@@ -4184,10 +4237,21 @@ function getDefaultLibrary() {
     ex('Front Squat','squat',4,4,75,'Elbows high — don\'t let chest collapse'),
     ex('Pause Back Squat','squat',4,3,70,'3-second pause — stay tight at the bottom'),
     ex('Pause Front Squat','squat',4,3,68,'3-second pause in the hole'),
-    ex('Overhead Squat','squat',4,4,65,'Bar stays behind ears — active lats'),
     ex('Box Squat','squat',4,4,70,'Sit to the box, do not rest — maintain tension'),
     ex('Bulgarian Split Squat','squat',3,8,0,'Rear foot elevated — keep front shin vertical'),
     ex('Goblet Squat','squat',3,10,0,''),
+    // ── Bench ──
+    ex('Bench Press','bench',4,5,70,''),
+    ex('Incline Bench Press','bench',4,6,65,'Bar path toward the upper chest'),
+    ex('Decline Bench Press','bench',4,6,70,''),
+    ex('Close-Grip Bench Press','bench',3,6,65,'Elbows tucked — triceps emphasis'),
+    ex('Dumbbell Bench Press','bench',3,8,0,''),
+    ex('Incline Dumbbell Bench Press','bench',3,8,0,''),
+    ex('Floor Press','bench',4,5,70,'Limits ROM at the bottom — strong lockout work'),
+    ex('Spoto Press','bench',4,4,65,'Pause 1–2 inches off the chest — no bounce'),
+    ex('Pin Press','bench',4,3,75,'Dead stop from pins — no stretch reflex, pure lockout strength'),
+    ex('Football Bar Bench Press','bench',4,6,70,'Neutral grip — shoulder-friendly pressing variation'),
+    ex('Band-Resisted Bench Press','bench',4,5,55,'Bands add resistance through lockout — accelerate the bar'),
     // ── Pull ──
     ex('Snatch Pull','pull',4,4,95,'Shrug at the top — same posture as the snatch'),
     ex('Snatch High Pull','pull',4,4,85,'Pull elbows high and wide above the bar'),
@@ -4215,19 +4279,73 @@ function getDefaultLibrary() {
     ex('Pull-Up','accessory',3,8,0,'Full ROM — dead hang to chin over bar'),
     ex('Lat Pulldown','accessory',3,10,0,''),
     ex('Face Pull','accessory',3,15,0,''),
-    ex('GHD Sit-Up','accessory',3,15,0,''),
-    ex('Ab Wheel Rollout','accessory',3,10,0,'Hips neutral — don\'t let the lower back sag'),
-    ex('Plank','accessory',3,0,0,'Hollow body position — breathe',{useTime:true,seconds:45}),
-    ex('Side Plank','accessory',3,0,0,'',{useTime:true,seconds:30}),
-    ex('Box Jump','accessory',4,5,0,'Soft landing — absorb through hips and knees'),
-    ex('Broad Jump','accessory',4,5,0,''),
     ex('Farmer\'s Carry','accessory',3,0,0,'',{useTime:true,seconds:40}),
     ex('Kettlebell Swing','accessory',3,12,0,'Hip hinge power — not a squat'),
     ex('Band Pull-Apart','accessory',3,20,0,''),
     ex('Single-Arm Dumbbell Snatch','accessory',3,8,0,''),
     ex('Dumbbell Row','accessory',3,10,0,''),
-    ex('Medicine Ball Slam','accessory',3,10,0,''),
     ex('Shrug','accessory',4,8,80,'Traps — straight up, no roll'),
+    // ── Accessory: General Strength & Conditioning ──
+    ex('Trap Bar Deadlift','accessory',4,5,0,'Neutral grip — accessible entry point for general strength deadlifting'),
+    ex('Walking Lunge','accessory',3,10,0,'Per leg — control the descent, drive through the front heel'),
+    ex('Chin-Up','accessory',3,8,0,'Underhand grip — biceps assist on the pull'),
+    ex('Seated Cable Row','accessory',3,10,0,'Chest tall — squeeze the shoulder blades together'),
+    ex('Dumbbell Shoulder Press','accessory',3,8,0,''),
+    ex('Single-Leg Romanian Deadlift','accessory',3,8,0,'Balance + posterior chain — control the descent'),
+    ex('Sled Push','accessory',4,0,0,'Drive through the ground — stay low and powerful',{useTime:true,seconds:30}),
+    ex('Battle Ropes','accessory',4,0,0,'',{useTime:true,seconds:30}),
+    ex('Suitcase Carry','accessory',3,0,0,'Per side — anti-lateral-flexion core work while walking',{useTime:true,seconds:30}),
+    // ── Plyometric ──
+    ex('Box Jump','plyo',4,5,0,'Soft landing — absorb through hips and knees'),
+    ex('Broad Jump','plyo',4,5,0,''),
+    ex('Depth Jump','plyo',4,5,0,'Step off the box, minimize ground contact time on landing'),
+    ex('Squat Jump','plyo',4,6,0,'Reset fully between reps — maximize height, not speed'),
+    ex('Tuck Jump','plyo',3,8,0,'Knees to chest at peak — quick ground contact'),
+    ex('Lateral Bound','plyo',3,6,0,'Per side — stick the landing before bounding back'),
+    ex('Single-Leg Box Jump','plyo',3,4,0,'Per leg — conservative height, prioritize landing mechanics'),
+    ex('Clap Push-Up','plyo',3,6,0,'Explosive press — full extension before the clap'),
+    ex('Medicine Ball Slam','plyo',3,10,0,''),
+    ex('Bounding','plyo',4,0,0,'Exaggerated running stride — maximize distance per step',{useTime:true,seconds:20}),
+    ex('Hurdle Hop','plyo',4,5,0,'Quick, reactive hops — minimize ground contact time'),
+    // ── Core ──
+    ex('GHD Sit-Up','core',3,15,0,''),
+    ex('Ab Wheel Rollout','core',3,10,0,'Hips neutral — don\'t let the lower back sag'),
+    ex('Plank','core',3,0,0,'Hollow body position — breathe',{useTime:true,seconds:45}),
+    ex('Side Plank','core',3,0,0,'',{useTime:true,seconds:30}),
+    ex('Pallof Press','core',3,10,0,'Per side — resist rotation, press straight out'),
+    ex('Dead Bug','core',3,10,0,'Per side — press low back into the floor throughout'),
+    ex('Hanging Leg Raise','core',3,10,0,'Control the descent — avoid swinging'),
+    ex('Hollow Body Hold','core',3,0,0,'Lower back pressed flat — arms and legs extended',{useTime:true,seconds:30}),
+    ex('Russian Twist','core',3,20,0,'Total both sides — rotate from the torso, not the arms'),
+    ex('Weighted Sit-Up','core',3,12,0,''),
+    ex('Cable Woodchop','core',3,10,0,'Per side — rotate through the torso, hips stay square'),
+    ex('Bird Dog','core',3,10,0,'Per side — opposite arm/leg extension, brace the core'),
+    // ── Warm-Up ──
+    ex('Jumping Jacks','warmup',1,0,0,'',{useTime:true,seconds:30}),
+    ex('Arm Circles','warmup',1,20,0,'Forward and backward'),
+    ex('Leg Swings','warmup',1,10,0,'Front-to-back and side-to-side, each leg'),
+    ex('World\'s Greatest Stretch','warmup',1,5,0,'Each side — lunge, rotate, reach overhead'),
+    ex('Walking Knee Hug','warmup',1,10,0,''),
+    ex('Inchworm to Push-Up','warmup',2,6,0,''),
+    ex('PVC Pass-Through','warmup',2,10,0,'Shoulder mobility — keep arms straight'),
+    ex('Glute Bridge','warmup',2,12,0,''),
+    ex('Lateral Band Walk','warmup',2,10,0,'Each direction — stay low, knees out'),
+    ex('Jump Rope','warmup',2,0,0,'',{useTime:true,seconds:60}),
+    ex('Scapular Push-Up','warmup',2,10,0,'Protract and retract — no elbow bend'),
+    ex('Empty Bar Good Morning','warmup',2,8,0,'Activation set — groove the hip hinge before loading'),
+    // ── Band Pre-Hab ──
+    ex('Band External Rotation','prehab',2,15,0,'Elbow pinned to side — rotate forearm out, control the return'),
+    ex('Band Internal Rotation','prehab',2,15,0,'Elbow pinned to side — rotate forearm in, control the return'),
+    ex('Band Face Pull','prehab',2,15,0,'Pull to eye level — lead with the elbows, squeeze the shoulder blades'),
+    ex('Band Y-Raise','prehab',2,12,0,'Thumbs up — raise overhead in a Y, light band tension only'),
+    ex('Band Dislocate','prehab',2,10,0,'Wide grip — pass band overhead and behind without bending the elbows'),
+    ex('Band Scapular Retraction Row','prehab',2,15,0,'Squeeze the shoulder blades together — pause at full retraction'),
+    ex('Band Terminal Knee Extension','prehab',2,15,0,'Band behind the knee — slight bend to full lockout, quad activation'),
+    ex('Band Hip Abduction','prehab',2,15,0,'Band above the knees — resist the band, don\'t let the hip rotate'),
+    ex('Band Clamshell','prehab',2,15,0,'Mini-band above the knees — keep feet together, hips stacked'),
+    ex('Band Standing Hip Flexion','prehab',2,12,0,'Band around the ankle — drive the knee up against resistance'),
+    ex('Band Good Morning','prehab',2,12,0,'Light band — groove the hip-hinge pattern, posterior chain activation'),
+    ex('Band Ankle Eversion','prehab',2,15,0,'Band around the forefoot — resist the inward roll, ankle stability'),
   ];
 }
 
@@ -4280,7 +4398,7 @@ function buildLibraryHTML() {
   }
 
   // Category order
-  const CAT_ORDER = ['snatch','clean','jerk','cj','squat','bench','accessory','plyo','core','other'];
+  const CAT_ORDER = ['warmup','prehab','snatch','clean','jerk','cj','squat','bench','pull','press','accessory','plyo','core','other'];
   let html;
 
   if (searchTerm) {
@@ -4334,7 +4452,9 @@ function _rosterMatches(a) {
 // Re-renders only the table so the search box in the toolbar keeps focus while typing.
 function rosterSearch(q) {
   _rosterFilter.q = q;
-  if(state.activeTab==='roster') document.getElementById('main-area').innerHTML = buildRosterHTML();
+  if(state.activeTab!=='roster') return;
+  const area = document.getElementById('main-area');
+  _withScrollPreserved(area, () => { area.innerHTML = buildRosterHTML(); });
 }
 
 function buildRosterHTML() {
@@ -4411,7 +4531,7 @@ function buildRosterHTML() {
       <button onclick="openAddSelectionToMeet()" class="btn btn-gold" style="font-size:12px;padding:4px 12px;">+ Add to Meet</button>
       <button onclick="_rosterSel.clear();renderMain();" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:4px 8px;">✕ Clear</button>
     </div>`:''}
-    <div class="chart-card" style="padding:0;overflow:auto;max-height:calc(100vh - 140px);">
+    <div class="chart-card" data-scroll-key="roster-table" style="padding:0;overflow:auto;max-height:calc(100vh - 140px);">
       <table style="width:100%;border-collapse:collapse;min-width:800px;">
         <thead><tr>
           <th style="position:sticky;top:0;z-index:10;padding:7px 10px;background:var(--dark2);border-bottom:1px solid var(--dark3);width:32px;text-align:center;">
