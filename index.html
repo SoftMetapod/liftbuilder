@@ -2108,15 +2108,31 @@ function _createDefaultTeam() {
   _stateCore.activeTeamId = id;
 }
 
+// Splits a legacy full name into {firstName, lastName} — last word is the last name,
+// everything before it is the first name (e.g. "Mary Jane Smith" -> "Mary Jane" / "Smith").
+function _splitFullName(full) {
+  const trimmed = (full || '').trim();
+  if (!trimmed) return { firstName: '', lastName: '' };
+  const idx = trimmed.lastIndexOf(' ');
+  if (idx === -1) return { firstName: trimmed, lastName: '' };
+  return { firstName: trimmed.slice(0, idx).trim(), lastName: trimmed.slice(idx + 1).trim() };
+}
+
 function _ensureTeamInit(t) {
   if (!t.programs) t.programs = {};
   if (!t.roster) t.roster = { athletes: [], customFields: [] };
   if (!t.roster.athletes) t.roster.athletes = [];
   if (!t.roster.customFields) t.roster.customFields = [];
   if (!t.meets) t.meets = [];
-  // Assign IDs to athletes that predate the ID field
   t.roster.athletes.forEach(a => {
+    // Assign IDs to athletes that predate the ID field
     if (!a.id) a.id = 'ath_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    // Migrate athletes that predate separate First/Last Name fields
+    if (a.firstName == null && a.lastName == null) {
+      const sp = _splitFullName(a.name);
+      a.firstName = sp.firstName;
+      a.lastName  = sp.lastName;
+    }
   });
 }
 
@@ -4364,7 +4380,8 @@ function buildRosterHTML() {
       <td style="padding:7px 10px;text-align:center;">
         <input type="checkbox" ${isSel?'checked':''} onchange="rosterToggleOne('${athKey.replace(/'/g,"\\'")}',this.checked)" style="cursor:pointer;">
       </td>
-      <td style="padding:7px 10px;font-weight:500;">${esc(a.name)}</td>
+      <td style="padding:7px 10px;font-weight:500;">${esc(a.firstName)||'—'}</td>
+      <td style="padding:7px 10px;font-weight:500;">${esc(a.lastName)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.gender)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.wc)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.gradYear)||'—'}</td>
@@ -4401,7 +4418,8 @@ function buildRosterHTML() {
             <input type="checkbox" ${_rosterSel.size===filtered.length&&filtered.length>0?'checked':''}
               onchange="rosterToggleAll(this.checked)" style="cursor:pointer;">
           </th>
-          ${sortBtn('name','Name')}
+          ${sortBtn('firstName','First Name')}
+          ${sortBtn('lastName','Last Name')}
           <th style="position:sticky;top:0;z-index:10;padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Gender</th>
           ${sortBtn('wc','WT Class (lbs)')}
           ${sortBtn('gradYear','Grad Year')}
@@ -4455,30 +4473,30 @@ function athleteFormHTML(a={}) {
     </div>`).join('');
   return `
     <div class="fg2">
-      <div class="form-field"><label>Name</label><input type="text" id="af-name" value="${a.name||''}" placeholder="Full name"></div>
+      <div class="form-field"><label>First Name</label><input type="text" id="af-firstName" value="${esc(a.firstName||'')}" placeholder="First name"></div>
+      <div class="form-field"><label>Last Name</label><input type="text" id="af-lastName" value="${esc(a.lastName||'')}" placeholder="Last name"></div>
+    </div>
+    <div class="fg2">
       <div class="form-field"><label>Gender</label>
         <select id="af-gender" onchange="updateWCOpts(this.value)">
           <option value="Girls" ${a.gender==='Girls'||!a.gender?'selected':''}>Girls</option>
           <option value="Boys" ${a.gender==='Boys'?'selected':''}>Boys</option>
         </select>
       </div>
-    </div>
-    <div class="fg2">
       <div class="form-field"><label>Weight class</label>
         <select id="af-wc">${a.gender==='Boys'?boysOpts:girlsOpts}</select>
       </div>
+    </div>
+    <div class="fg2">
       <div class="form-field"><label>Grad year</label>
         <input type="number" id="af-gradYear" value="${a.gradYear||new Date().getFullYear()+1}" min="2024" max="2035">
       </div>
-    </div>
-    <div class="fg2">
       <div class="form-field"><label>Team</label>
         <select id="af-team">
           <option value="Varsity" ${a.team==='Varsity'?'selected':''}>Varsity</option>
           <option value="JV" ${a.team==='JV'?'selected':''}>JV</option>
         </select>
       </div>
-      <div class="form-field"><label></label></div>
     </div>
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-top:4px;border-top:1px solid var(--dark3);">Maxes (lbs)</div>
     <div class="fg3">
@@ -4639,13 +4657,19 @@ function confirmImportRoster() {
   let added=0, skipped=0;
   rows.forEach(r=>{
     if(!r.length||!r.some(c=>c)) return;
-    const name=(cols.firstName>=0&&cols.lastName>=0)
-      ?((r[cols.firstName]||'')+' '+(r[cols.lastName]||'')).trim()
-      :(cols.name>=0?r[cols.name]?.trim():'');
+    let firstName='', lastName='';
+    if(cols.firstName>=0&&cols.lastName>=0){
+      firstName=(r[cols.firstName]||'').trim();
+      lastName =(r[cols.lastName]||'').trim();
+    } else if(cols.name>=0){
+      const sp=_splitFullName(r[cols.name]||'');
+      firstName=sp.firstName; lastName=sp.lastName;
+    }
+    const name=(firstName+' '+lastName).trim();
     if(!name){skipped++;return;}
     const a={
       id: 'ath_'+Date.now()+'_'+Math.floor(Math.random()*9999),
-      name,
+      firstName, lastName, name,
       gender: cols.gender>=0?(r[cols.gender]?.trim()||''):'',
       wc:     cols.wc>=0?(r[cols.wc]?.trim()||''):'',
       team:   cols.team>=0?(r[cols.team]?.trim()||''):'',
@@ -4660,8 +4684,8 @@ function confirmImportRoster() {
     if(!state.roster.athletes) state.roster.athletes=[];
     const existing = state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase());
     if (existing) {
-      // Update existing athlete with any non-zero imported values
-      Object.keys(a).forEach(k=>{ if(k!=='name' && k!=='id' && a[k]) existing[k]=a[k]; });
+      // Update existing athlete with any non-zero imported values (don't clobber their name on a stats-only import)
+      Object.keys(a).forEach(k=>{ if(!['name','firstName','lastName','id'].includes(k) && a[k]) existing[k]=a[k]; });
       skipped++;
     } else {
       state.roster.athletes.push(a); added++;
@@ -4773,13 +4797,15 @@ function wireAthletePreview() {
 }
 
 function saveAthlete(idx) {
-  const name=document.getElementById('af-name').value.trim();
-  if(!name){alert('Please enter athlete name.');return;}
+  const firstName=document.getElementById('af-firstName').value.trim();
+  const lastName=document.getElementById('af-lastName').value.trim();
+  const name=(firstName+' '+lastName).trim();
+  if(!name){alert('Please enter the athlete\'s first or last name.');return;}
   const fields=rosterFields();
   const existing=idx>=0?state.roster.athletes[idx]:null;
   const a={
     id: existing?.id || ('ath_'+Date.now()+'_'+Math.floor(Math.random()*9999)),
-    name,
+    firstName, lastName, name,
     gender: document.getElementById('af-gender').value,
     wc:     document.getElementById('af-wc').value,
     gradYear: parseInt(document.getElementById('af-gradYear').value)||0,
@@ -4982,10 +5008,10 @@ function exportRosterCSV() {
   const athletes = state.roster?.athletes || [];
   const fields   = rosterFields();
   const extraIds = fields.filter(f=>!['snatch','cj','bench'].includes(f.id));
-  const headers  = ['Name','Gender','WT Class (lbs)','Grad Year','Team','Snatch','C&J','Bench',
+  const headers  = ['first_name','last_name','Gender','WT Class (lbs)','grad_year','Team','Snatch','C&J','Bench',
     ...extraIds.map(f=>f.label),'Olympic Total','Traditional Total'];
   const rows = athletes.map(a => [
-    a.name||'', a.gender||'', a.wc||'', a.gradYear||'', a.team||'',
+    a.firstName||'', a.lastName||'', a.gender||'', a.wc||'', a.gradYear||'', a.team||'',
     a.snatch||0, a.cj||0, a.bench||0,
     ...extraIds.map(f=>a[f.id]||''),
     athleteOlympicTotal(a)||'', athleteTraditionalTotal(a)||'',
@@ -5014,7 +5040,7 @@ function exportRosterPDF() {
   doc.setDrawColor(...GOLD); doc.setLineWidth(1); doc.line(ML,50,PW-MR,50);
 
   let y=62;
-  const cols=['Name','Gender','WT Class','Grad','Team','Snatch','C&J','Bench',
+  const cols=['First Name','Last Name','Gender','WT Class','Grad','Team','Snatch','C&J','Bench',
     ...fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>f.label),
     'Olympic Total','Traditional Total'];
   const colW=CW/cols.length;
@@ -5031,7 +5057,7 @@ function exportRosterPDF() {
     if(ri%2===0){doc.setFillColor(245,245,243);doc.rect(ML,y,CW,14,'F');}
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...BLACK);
     const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
-    const vals=[a.name,a.gender||'',a.wc||'',a.gradYear||'',a.team||'',
+    const vals=[a.firstName||'',a.lastName||'',a.gender||'',a.wc||'',a.gradYear||'',a.team||'',
       a.snatch||0,a.cj||0,a.bench||0,
       ...fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>a[f.id]||0),
       ot||'—',tt||'—'];

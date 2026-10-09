@@ -7,15 +7,19 @@ describe('Roster search', () => {
     app = loadApp();
     app.run(`
       state.roster.athletes = [
-        { id:'a1', name:'Maria Lopez', gender:'Girls', wc:'119', team:'Varsity', snatch:100, cj:130, bench:120 },
-        { id:'a2', name:'Jordan Smith', gender:'Boys', wc:'154', team:'JV', snatch:150, cj:190, bench:200 },
-        { id:'a3', name:'Sam Lo', gender:'Boys', wc:'139', team:'Varsity', snatch:120, cj:160, bench:170 },
+        { id:'a1', firstName:'Maria', lastName:'Lopez', name:'Maria Lopez', gender:'Girls', wc:'119', team:'Varsity', snatch:100, cj:130, bench:120 },
+        { id:'a2', firstName:'Jordan', lastName:'Smith', name:'Jordan Smith', gender:'Boys', wc:'154', team:'JV', snatch:150, cj:190, bench:200 },
+        { id:'a3', firstName:'Sam', lastName:'Lo', name:'Sam Lo', gender:'Boys', wc:'139', team:'Varsity', snatch:120, cj:160, bench:170 },
       ];
       switchTab('roster');
     `);
   });
 
-  const names = () => [...app.document.querySelectorAll('#main-area tbody tr td:nth-child(2)')].map(td => td.textContent);
+  // First Name is column 2, Last Name is column 3 (column 1 is the select-all checkbox)
+  const names = () => [...app.document.querySelectorAll('#main-area tbody tr')].map(tr => {
+    const tds = tr.querySelectorAll('td');
+    return `${tds[1].textContent} ${tds[2].textContent}`;
+  });
 
   it('renders a search box in the toolbar and all rows by default', () => {
     expect(app.document.getElementById('roster-search')).not.toBeNull();

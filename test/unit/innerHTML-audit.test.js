@@ -8,11 +8,18 @@ describe('innerHTML audit — known user-controlled fields are escaped', () => {
   // These are the T-001 through T-018 threat vectors from THREATS.md
 
   describe('Athlete PII (FERPA Restricted — T-001)', () => {
-    it('a.name is escaped in all visible cell innerHTML contexts', () => {
-      // Verify the roster table TD uses esc(a.name)
-      expect(html).toContain('<td style="padding:7px 10px;font-weight:500;">${esc(a.name)}</td>');
-      // No raw a.name in a <td> cell
-      expect(html).not.toContain('<td style="padding:7px 10px;font-weight:500;">${a.name}</td>');
+    it('a.firstName and a.lastName are escaped in all visible cell innerHTML contexts', () => {
+      // The roster table shows First Name / Last Name as separate TDs, each using esc()
+      expect(html).toContain('<td style="padding:7px 10px;font-weight:500;">${esc(a.firstName)');
+      expect(html).toContain('<td style="padding:7px 10px;font-weight:500;">${esc(a.lastName)');
+      // No raw a.firstName/a.lastName in a <td> cell
+      expect(html).not.toContain('<td style="padding:7px 10px;font-weight:500;">${a.firstName}</td>');
+      expect(html).not.toContain('<td style="padding:7px 10px;font-weight:500;">${a.lastName}</td>');
+    });
+
+    it('a.firstName and a.lastName are escaped in the Add/Edit Athlete form value= attributes', () => {
+      expect(html).toContain('value="${esc(a.firstName||\'\')}"');
+      expect(html).toContain('value="${esc(a.lastName||\'\')}"');
     });
 
     it('a.gender is escaped in innerHTML', () => {
