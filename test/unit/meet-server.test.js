@@ -40,6 +40,8 @@ stubModule('electron', {
   BrowserWindow,
   shell: { openExternal: vi.fn() },
   ipcMain: { handle: (ch, fn) => { ipc[ch] = fn; } },
+  protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
+  net: { fetch: vi.fn() },
 });
 stubModule('socket.io', { Server });
 stubModule('electron-updater', { autoUpdater: { on: vi.fn(), checkForUpdates: () => Promise.resolve() } });

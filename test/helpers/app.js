@@ -5,12 +5,14 @@ import { join } from 'path';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
 const ROOT = process.cwd();
-const rawHtml  = readFileSync(join(ROOT, 'index.html'), 'utf-8');
-const hostMeet = readFileSync(join(ROOT, 'host-meet.js'), 'utf-8');
+const rawHtml    = readFileSync(join(ROOT, 'index.html'), 'utf-8');
+const hostMeet   = readFileSync(join(ROOT, 'host-meet.js'), 'utf-8');
+const annotation = readFileSync(join(ROOT, 'annotation-engine.js'), 'utf-8');
 
 // Vendor libs (chart/jspdf/purify) are not needed for logic tests and would need network/file access.
 const html = rawHtml
   .replace(/<script src="vendor\/[^"]+"><\/script>\s*/g, '')
+  .replace('<script src="annotation-engine.js"></script>', '<script>' + annotation.replace(/<\/script>/g, '<\\/script>') + '</script>')
   .replace('<script src="host-meet.js"></script>', '<script>' + hostMeet.replace(/<\/script>/g, '<\\/script>') + '</script>');
 
 const IGNORED = /Could not parse CSS|Not implemented: HTMLCanvasElement|Not implemented: window\.scrollTo|Not implemented: navigation/;

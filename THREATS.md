@@ -320,6 +320,51 @@ No backend. No network requests from app code. No auth layer (Phase 1).
 
 ---
 
+### T-019 — Path traversal / arbitrary file read via the `lb-video://` protocol handler
+| Field | Value |
+|-------|-------|
+| **STRIDE** | Tampering / Information Disclosure |
+| **Description** | The Film Room video player loads clips via a custom `lb-video://<id>/<name>` scheme handled in the main process (`protocol.handle('lb-video', ...)`, main.js). If `<id>` or `<name>` were used to build a filesystem path without validation, a crafted URL (e.g. `lb-video://../../../etc/passwd/source.txt`) could read arbitrary files outside `userData/videos/`. |
+| **Affected component** | `protocol.handle('lb-video', ...)` (main.js); `_videoDir()` (main.js) |
+| **Likelihood** | L — the renderer is fully sandboxed/context-isolated and never constructs these URLs from untrusted input; `v.id` always comes from `crypto.randomUUID()` set by the main process at import time |
+| **Impact** | H — arbitrary local file read, if exploitable |
+| **Risk** | L |
+| **Mitigation (implemented)** | `_videoDir(id)` rejects any id that doesn't match the uuid regex `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/` before joining it onto `VIDEOS_DIR` — `..`/path separators in `id` cannot pass this check. The served filename is also checked against `manifest.json`'s recorded extension (written by the main process at import time, never trusted from the URL or renderer) rather than accepted as-is. |
+| **Control reference** | OWASP ASVS 12.3.1 (path traversal); CWE-22 |
+| **Phase** | Implemented at introduction (Film Room Phase 1) |
+
+---
+
+### T-020 — Denial of service via unbounded video import size
+| Field | Value |
+|-------|-------|
+| **STRIDE** | Denial of Service |
+| **Description** | `import-video` (main.js) copies whatever file the coach selects via the native file-open dialog into `userData/videos/<id>/source.<ext>` with no size cap. A very large video (many GB) could fill available disk space; same category of risk as T-008 (oversized CSV/JSON import), but for binary video files instead of text. |
+| **Affected component** | `ipcMain.handle('import-video', ...)` (main.js) |
+| **Likelihood** | L — requires the coach (or someone with access to their machine) to deliberately select an oversized file; the renderer never supplies the source path itself |
+| **Impact** | M — disk exhaustion; does not corrupt existing data |
+| **Risk** | L |
+| **Proposed mitigation** | Check the selected file's size (via `fs.statSync`) before copying and reject/warn above a configurable threshold (e.g. 2 GB). Not yet implemented — same accepted-risk category as T-008. |
+| **Control reference** | NIST SI-10; OWASP ASVS 12.1.1 |
+| **Phase** | Backlog (same priority as T-008) |
+
+---
+
+### T-021 — Exported clip filename reuses the shared sanitizer (no drift risk)
+| Field | Value |
+|-------|-------|
+| **STRIDE** | Tampering |
+| **Description** | `export-video-clip` (main.js) builds its default save filename from the clip's `filename` field, which ultimately originates from the OS file picker's `originalFilename` (coach-controlled, but local-only — never from a network source). An unsanitized filename could inject path separators or reserved characters into the save dialog's default path. |
+| **Affected component** | `ipcMain.handle('export-video-clip', ...)` (main.js) |
+| **Likelihood** | L — `dialog.showSaveDialog` is main-process-controlled and the coach confirms the final path interactively regardless |
+| **Impact** | L |
+| **Risk** | L |
+| **Mitigation (implemented)** | Reuses the exact same `.replace(/[/\\:*?"<>|]+/g, '_')` sanitizer as `export-pdf`'s `safeName`, verified by test (`test/unit/export-clip.test.js`) to stay byte-identical between the two handlers so they can't silently drift apart. |
+| **Control reference** | OWASP ASVS 12.3.1 |
+| **Phase** | Implemented at introduction (Film Room Phase 4) |
+
+---
+
 ## Residual High Risks Before Phase 2
 
 The following threats will have residual risk after Phase 1 (planning) since no code changes occur in this phase. All should be resolved in Phase 2.

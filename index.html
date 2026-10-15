@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; connect-src 'self' http: https:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: lb-video:; media-src 'self' blob: lb-video:; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; connect-src 'self' http: https:;">
 <title>LiftBuilder — Weightlifting Program Manager</title>
 <link href="vendor/fonts.css" rel="stylesheet">
 <script src="vendor/chart.umd.js"></script>
@@ -254,6 +254,10 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 
 /* ── Empty state ── */
 .empty-msg{color:var(--muted);font-size:14px;padding:2rem;text-align:center;}
+.ann-tool-btn{width:30px;height:30px;border-radius:4px;border:1px solid var(--dark3);background:var(--dark2);color:var(--white);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.ann-tool-btn.active{background:var(--gold-a20);border-color:var(--gold);color:var(--gold);}
+.ann-color-swatch{width:20px;height:20px;border-radius:50%;border:2px solid var(--dark3);cursor:pointer;padding:0;}
+.ann-color-swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-a30);}
 
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:var(--dark);}
@@ -387,12 +391,14 @@ const state = new Proxy(_stateCore, {
     if (key === 'programs') { const t = team(); return t ? t.programs : {}; }
     if (key === 'roster')   { const t = team(); return t ? (t.roster || {athletes:[],customFields:[]}) : {athletes:[],customFields:[]}; }
     if (key === 'meets')    { const t = team(); return t ? (t.meets   || []) : []; }
+    if (key === 'videos')   { const t = team(); if (!t) return []; if (!t.videos) t.videos = []; return t.videos; }
     return target[key];
   },
   set(target, key, value) {
     if (key === 'programs') { const t = team(); if (t) t.programs = value; return true; }
     if (key === 'roster')   { const t = team(); if (t) t.roster   = value; return true; }
     if (key === 'meets')    { const t = team(); if (t) t.meets     = value; return true; }
+    if (key === 'videos')   { const t = team(); if (t) t.videos    = value; return true; }
     target[key] = value; return true;
   }
 });
@@ -866,6 +872,7 @@ function renderSidebar() {
     ${_toolsVisible['calculator']!==false?`<div class="nav-item ${state.activeTab==='calculator'?'active':''}" onclick="switchTab('calculator')"><span>⚖️</span> Calculator</div>`:''}
     ${_toolsVisible['templates']!==false?`<div class="nav-item ${state.activeTab==='templates'?'active':''}" onclick="switchTab('templates')"><span>📐</span> Templates</div>`:''}
     ${_toolsVisible['library']!==false?`<div class="nav-item ${state.activeTab==='library'?'active':''}" onclick="switchTab('library')"><span>📚</span> Exercise Library</div>`:''}
+    ${_toolsVisible['filmroom']!==false?`<div class="nav-item ${state.activeTab==='filmroom'?'active':''}" onclick="switchTab('filmroom')"><span>🎬</span> Film Room</div>`:''}
     <div style="height:1px;background:var(--dark3);margin:4px 0;"></div>
     ${_toolsVisible['hostmeet']!==false?`<div class="nav-item ${state.activeTab==='hostmeet'?'active':''}" onclick="switchTab('hostmeet')"><span>🏆</span> Host Meet</div>`:''}
     <div style="flex:1;"></div>
@@ -902,6 +909,7 @@ function _withScrollPreserved(area, renderFn) {
 
 function renderMain() {
   _hideTip();
+  _teardownAnnotationCanvas();
   const area = document.getElementById('main-area');
   _withScrollPreserved(area, () => {
     if (state.activeTab==='program')   { area.innerHTML=buildProgramHTML(); }
@@ -913,6 +921,7 @@ function renderMain() {
     else if (state.activeTab==='calendar') { area.innerHTML=buildCalendarHTML(); }
     else if (state.activeTab==='calculator') { area.innerHTML=buildCalculatorHTML(); }
     else if (state.activeTab==='meets') { area.innerHTML=buildMeetsHTML(); }
+    else if (state.activeTab==='filmroom') { area.innerHTML=buildFilmRoomHTML(); }
     else if (state.activeTab==='hostmeet') { area.innerHTML=HM.buildHTML(); }
   });
   renderProgToolbar();
@@ -2134,7 +2143,7 @@ function togglePill(el,day) {
 // ═══════════════════════════════════════════════════
 function _createDefaultTeam() {
   const id = 'team_1';
-  _stateCore.teams[id] = { id, name: 'Team 1', programs: {}, roster: { athletes: [], customFields: [] }, meets: [] };
+  _stateCore.teams[id] = { id, name: 'Team 1', programs: {}, roster: { athletes: [], customFields: [] }, meets: [], videos: [] };
   _stateCore.activeTeamId = id;
 }
 
@@ -2154,6 +2163,7 @@ function _ensureTeamInit(t) {
   if (!t.roster.athletes) t.roster.athletes = [];
   if (!t.roster.customFields) t.roster.customFields = [];
   if (!t.meets) t.meets = [];
+  if (!t.videos) t.videos = [];
   t.roster.athletes.forEach(a => {
     // Assign IDs to athletes that predate the ID field
     if (!a.id) a.id = 'ath_' + Date.now() + '_' + Math.floor(Math.random()*9999);
@@ -2205,7 +2215,7 @@ function saveNewTeam() {
   const name = document.getElementById('new-team-name').value.trim();
   if (!name) { alert('Enter a team name.'); return; }
   const id = 'team_' + Date.now();
-  _stateCore.teams[id] = { id, name, programs: {}, roster: { athletes: [], customFields: [] }, meets: [] };
+  _stateCore.teams[id] = { id, name, programs: {}, roster: { athletes: [], customFields: [] }, meets: [], videos: [] };
   _stateCore.activeTeamId = id;
   state.activeProgId = null;
   state.currentWeek = 1;
@@ -3580,6 +3590,7 @@ function buildMeetsHTML() {
     const typeBorder= typeLabel === 'Games' ? 'rgba(168,127,212,.4)'  : 'var(--gold-a30)';
     const weighin   = m.weighinTime ? ` · Weigh-in ${m.weighinTime}` : '';
     const homeAway  = m.homeAway === 'Home' ? `<span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;background:rgba(94,192,138,.12);color:#5EC08A;border:1px solid rgba(94,192,138,.3);margin-left:2px;">HOME</span>` : m.homeAway === 'Away' ? `<span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px;background:rgba(201,168,76,.08);color:var(--muted);border:1px solid var(--dark3);margin-left:2px;">AWAY</span>` : '';
+    const clipCount = (state.videos||[]).filter(v => v.meetId === m.id).length;
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--dark3);border-radius:5px;margin-bottom:8px;background:var(--dark1);" onmouseenter="this.style.borderColor='var(--gold-a40)'" onmouseleave="this.style.borderColor='var(--dark3)'">
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="_activeMeetId='${m.id}';renderMain();">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
@@ -3590,6 +3601,7 @@ function buildMeetsHTML() {
         <div style="font-size:12px;color:var(--muted);">${dateStr}${m.location?' · '+esc(m.location):''}${weighin} · ${entryCount} athlete${entryCount!==1?'s':''}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        ${clipCount?`<span onclick="event.stopPropagation();_filmRoomFilter={q:'',athleteId:'',lift:'',dateFrom:'',dateTo:'',annotatedOnly:false,meetId:'${m.id}'};switchTab('filmroom');" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 9px;border:1px solid var(--gold-a30);border-radius:3px;background:var(--gold-a15);color:var(--gold);cursor:pointer;" title="View tagged film">🎬 ${clipCount}</span>`:''}
         <button onclick="event.stopPropagation();launchHostMeet('${m.id}')" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 9px;border:1px solid rgba(94,192,138,.4);border-radius:3px;background:none;color:#5EC08A;cursor:pointer;" title="Open in Host Meet">🏆 Host</button>
         <button onclick="event.stopPropagation();openEditMeet('${m.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:3px 7px;" title="Edit">✏️</button>
         <button onclick="event.stopPropagation();deleteMeet('${m.id}')" style="background:none;border:none;cursor:pointer;color:#E07070;font-size:13px;padding:3px 7px;" title="Delete">✕</button>
@@ -4431,6 +4443,743 @@ function buildLibraryHTML() {
   return `<div style="padding:1.25rem;">${html}</div>`;
 }
 
+// ═══════════════════════════════════════════════════
+//  FILM ROOM  (video review)
+// ═══════════════════════════════════════════════════
+let _filmRoomFilter    = { q: '', athleteId: '', lift: '', dateFrom: '', dateTo: '', annotatedOnly: false, meetId: '' };
+let _filmRoomPlayerId  = null;  // non-null while viewing a single clip
+let _pendingVideoImport = null; // import result awaiting the tag modal
+
+// Drawing state — annotations are keyed to a time bucket (AnnotationEngine.timeBucket),
+// so each open clip gets a Map of bucket-key -> AnnotationEngine layer (in-memory for the
+// current session; persisted into state.videos[i].strokes[bucket] on every edit).
+let _filmRoomDrawMode       = false; // true = canvas intercepts pointer events, video controls don't
+let _filmRoomActiveVideoId  = null;  // which clip's buckets are currently loaded below
+let _filmRoomLayersByBucket = new Map();
+let _filmRoomEditBucket     = null;  // the bucket key being edited — only set while draw mode is on
+let _filmRoomLayer          = null;  // = _filmRoomLayersByBucket.get(_filmRoomEditBucket) while editing, else null
+let _filmRoomCanvasHandle   = null;  // AnnotationEngine.attachCanvasHandlers() return value
+let _filmRoomSaveTimer      = null;  // debounced saveState() after a stroke edit
+let _activeAnnotationTool      = 'pen';
+let _activeAnnotationColor     = '#F5821F';
+let _activeAnnotationThickness = 0.006; // normalized (fraction of canvas width)
+
+function _athName(a) {
+  if (!a) return 'Unknown athlete';
+  const n = `${a.firstName||''} ${a.lastName||''}`.trim();
+  return n || a.name || 'Unnamed';
+}
+
+function _fmtDuration(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function buildFilmRoomHTML() {
+  if (_filmRoomPlayerId) {
+    const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+    if (v) return buildVideoPlayerHTML(v);
+    _filmRoomPlayerId = null;
+  }
+  return buildVideoGalleryHTML();
+}
+
+// Re-renders just the gallery (keeps scroll position) — used by every filter control.
+function _rerenderFilmRoomGallery() {
+  const area = document.getElementById('main-area');
+  if (!area) return;
+  _withScrollPreserved(area, () => { area.innerHTML = buildFilmRoomHTML(); });
+}
+
+function _resetFilmRoomFilter() {
+  _filmRoomFilter = { q: '', athleteId: '', lift: '', dateFrom: '', dateTo: '', annotatedOnly: false, meetId: '' };
+  _rerenderFilmRoomGallery();
+}
+
+function buildVideoGalleryHTML() {
+  const f = _filmRoomFilter;
+  const q = (f.q||'').toLowerCase().trim();
+  let videos = (state.videos||[]).slice().sort((a,b) => (b.importedAt||0) - (a.importedAt||0));
+  if (q) {
+    videos = videos.filter(v => {
+      const ath = (state.roster.athletes||[]).find(a => (a.id||a.name)===v.athleteId);
+      return (v.filename||'').toLowerCase().includes(q)
+        || (v.notes||'').toLowerCase().includes(q)
+        || _athName(ath).toLowerCase().includes(q);
+    });
+  }
+  if (f.athleteId) videos = videos.filter(v => v.athleteId === f.athleteId);
+  if (f.lift)      videos = videos.filter(v => v.lift === f.lift);
+  if (f.dateFrom)  videos = videos.filter(v => v.date && v.date >= f.dateFrom);
+  if (f.dateTo)    videos = videos.filter(v => v.date && v.date <= f.dateTo);
+  if (f.annotatedOnly) videos = videos.filter(v => Object.keys(v.strokes||{}).length > 0);
+  if (f.meetId)    videos = videos.filter(v => v.meetId === f.meetId);
+
+  const filteredMeet = f.meetId ? (state.meets||[]).find(m => m.id === f.meetId) : null;
+  const athletes = (state.roster.athletes||[]).slice().sort((a,b)=>_athName(a).localeCompare(_athName(b)));
+  const athOpts = athletes.map(a => { const id = esc(a.id||a.name); return `<option value="${id}" ${id===f.athleteId?'selected':''}>${esc(_athName(a))}</option>`; }).join('');
+  const liftOpts = Object.keys(CAT_META).map(k => `<option value="${k}" ${k===f.lift?'selected':''}>${esc(CAT_META[k].label)}</option>`).join('');
+  const selStyle = 'background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:6px 8px;font-size:12px;';
+
+  const header = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.6rem;flex-wrap:wrap;">
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;margin:0;flex:1;">🎬 Film Room</h2>
+    <input type="text" value="${esc(f.q)}" placeholder="Search clips…" oninput="_filmRoomFilter.q=this.value;_rerenderFilmRoomGallery();" style="${selStyle}width:160px;">
+    <button class="btn btn-gold" style="font-size:13px;" onclick="openImportVideo()">⬆ Import Video</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+    <select style="${selStyle}" onchange="_filmRoomFilter.athleteId=this.value;_rerenderFilmRoomGallery();"><option value="">All athletes</option>${athOpts}</select>
+    <select style="${selStyle}" onchange="_filmRoomFilter.lift=this.value;_rerenderFilmRoomGallery();"><option value="">All lifts</option>${liftOpts}</select>
+    <input type="date" value="${esc(f.dateFrom)}" title="From date" onchange="_filmRoomFilter.dateFrom=this.value;_rerenderFilmRoomGallery();" style="${selStyle}">
+    <span style="color:var(--muted);font-size:12px;">–</span>
+    <input type="date" value="${esc(f.dateTo)}" title="To date" onchange="_filmRoomFilter.dateTo=this.value;_rerenderFilmRoomGallery();" style="${selStyle}">
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;">
+      <input type="checkbox" ${f.annotatedOnly?'checked':''} onchange="_filmRoomFilter.annotatedOnly=this.checked;_rerenderFilmRoomGallery();"> Annotated only
+    </label>
+    ${filteredMeet?`<span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;padding:3px 9px;border:1px solid var(--gold-a30);border-radius:3px;background:var(--gold-a15);color:var(--gold);">🏆 ${esc(filteredMeet.name)} <span onclick="_filmRoomFilter.meetId='';_rerenderFilmRoomGallery();" style="cursor:pointer;margin-left:4px;" title="Clear meet filter">✕</span></span>`:''}
+    ${(f.q||f.athleteId||f.lift||f.dateFrom||f.dateTo||f.annotatedOnly||f.meetId)?`<button onclick="_resetFilmRoomFilter()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;padding:0;text-decoration:underline;">Clear filters</button>`:''}
+  </div>`;
+
+  if (!(state.videos||[]).length) {
+    return `<div style="padding:1.25rem;">${header}<div class="empty-msg">No clips yet. Import a recorded lift to start building your film library.</div></div>`;
+  }
+  if (!videos.length) {
+    return `<div style="padding:1.25rem;">${header}<div class="empty-msg">No clips match the current filters.</div></div>`;
+  }
+
+  const cards = videos.map(v => {
+    const ath = (state.roster.athletes||[]).find(a => (a.id||a.name)===v.athleteId);
+    const liftLabel = CAT_META[v.lift]?.label || '';
+    const dateStr = v.date ? new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    const strokeCount = Object.keys(v.strokes||{}).length;
+    return `<div style="background:var(--dark1);border:1px solid var(--dark3);border-radius:8px;overflow:hidden;cursor:pointer;" onclick="openVideoPlayer('${v.id}')">
+      <div style="position:relative;aspect-ratio:16/9;background:var(--dark2);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+        <img data-video-id="${v.id}" crossorigin="anonymous" src="lb-video://${v.id}/thumb.jpg" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:100%;height:100%;object-fit:cover;">
+        <div style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:32px;color:var(--muted);">🎬</div>
+        ${v.duration?`<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.75);color:var(--white);font-size:11px;padding:1px 6px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;">${_fmtDuration(v.duration)}</div>`:''}
+        ${strokeCount?`<div style="position:absolute;top:6px;left:6px;background:var(--gold);color:var(--black);font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;">✎ ${strokeCount}</div>`:''}
+      </div>
+      <div style="padding:9px 11px;">
+        <div style="font-size:13px;font-weight:600;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(v.filename)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${ath?esc(_athName(ath)):'Unassigned'}${liftLabel?' · '+esc(liftLabel):''}${dateStr?' · '+dateStr:''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div style="padding:1.25rem;">${header}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">${cards}</div>
+  </div>`;
+}
+
+const ANNOTATION_TOOLS = [
+  { key:'pen',     icon:'✏️', label:'Pen' },
+  { key:'line',    icon:'／', label:'Line' },
+  { key:'arrow',   icon:'➜',  label:'Arrow' },
+  { key:'rect',    icon:'▭',  label:'Rectangle' },
+  { key:'ellipse', icon:'◯',  label:'Ellipse' },
+  { key:'eraser',  icon:'🧽', label:'Eraser' },
+];
+const ANNOTATION_COLORS = ['#F5821F','#E85252','#4A90D9','#2ECC71','#FFFFFF','#111111'];
+
+function buildVideoPlayerHTML(v) {
+  const ath = (state.roster.athletes||[]).find(a => (a.id||a.name)===v.athleteId);
+  const liftLabel = CAT_META[v.lift]?.label || '';
+  const dateStr = v.date ? new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
+
+  const toolBtns = ANNOTATION_TOOLS.map(t => `<button class="ann-tool-btn ${_activeAnnotationTool===t.key?'active':''}" onclick="_setAnnotationTool('${t.key}')" title="${esc(t.label)}">${t.icon}</button>`).join('');
+  const colorBtns = ANNOTATION_COLORS.map(hex => `<button class="ann-color-swatch ${_activeAnnotationColor===hex?'active':''}" style="background:${hex};" onclick="_setAnnotationColor('${hex}')" title="${hex}"></button>`).join('');
+
+  return `<div style="padding:1.25rem;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap;">
+      <button onclick="closeVideoPlayer()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;">← Film Room</button>
+      <div style="flex:1;min-width:0;">
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(v.filename)}</h2>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${ath?esc(_athName(ath)):'Unassigned'}${liftLabel?' · '+esc(liftLabel):''}${dateStr?' · '+dateStr:''}</div>
+      </div>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openExportClipModal()">⬇ Export Clip</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openEditVideoTag('${v.id}')">✏️ Edit Info</button>
+      <button class="btn btn-outline" style="font-size:12px;color:#C06060;border-color:#C0606060;" onclick="deleteVideo('${v.id}')">🗑 Delete</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--dark1);border:1px solid var(--dark3);border-radius:8px;max-width:960px;">
+      <button id="ann-draw-toggle" class="btn ${_filmRoomDrawMode?'btn-gold':'btn-outline'}" style="font-size:12px;" onclick="_toggleDrawMode()">✏️ ${_filmRoomDrawMode?'Drawing — click to resume video':'Draw on frame'}</button>
+      <div style="display:flex;gap:2px;">${toolBtns}</div>
+      <div style="display:flex;gap:4px;">${colorBtns}</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:11px;color:var(--muted);">Size</label>
+        <input type="range" min="2" max="24" value="${Math.round(_activeAnnotationThickness*1000)}" oninput="_setAnnotationThickness(this.value)" style="width:80px;">
+      </div>
+      <div style="flex:1;"></div>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="_annotationUndo()">↶ Undo</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="_annotationRedo()">↷ Redo</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="_annotationClear()">🗑 Clear</button>
+    </div>
+
+    <div id="filmroom-stage" style="position:relative;background:#000;border-radius:8px;overflow:hidden;max-width:960px;">
+      <video id="filmroom-video" crossorigin="anonymous" src="lb-video://${v.id}/source.${v.ext}" controls style="width:100%;display:block;max-height:70vh;" onloadedmetadata="_onFilmRoomVideoLoaded('${v.id}')"></video>
+      <canvas id="annotation-canvas" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;pointer-events:${_filmRoomDrawMode?'auto':'none'};"></canvas>
+    </div>
+    <div id="filmroom-ticks" style="position:relative;height:14px;margin-top:4px;max-width:960px;" title="Annotated moments — click to jump">${_buildTickMarksHTML(v)}</div>
+    ${v.notes?`<div style="margin-top:1rem;padding:12px 14px;border:1px solid var(--dark3);border-radius:8px;font-size:13px;color:var(--muted);white-space:pre-wrap;max-width:960px;">${esc(v.notes)}</div>`:''}
+  </div>`;
+}
+
+function _buildTickMarksHTML(v) {
+  if (typeof AnnotationEngine === 'undefined' || !v.duration) return '';
+  const ticks = AnnotationEngine.buildTimelineTicks(v.strokes, v.duration);
+  return ticks.map(t => `<button onclick="_seekFilmRoomTo(${t.time})" title="Annotated at ${_fmtDuration(t.time)}" style="position:absolute;left:${(t.position*100).toFixed(2)}%;top:3px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--gold);border:1px solid var(--dark1);cursor:pointer;padding:0;"></button>`).join('');
+}
+
+function _refreshFilmRoomTicks() {
+  const el = document.getElementById('filmroom-ticks');
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  if (!el || !v) return;
+  el.innerHTML = _buildTickMarksHTML(v);
+}
+
+function _seekFilmRoomTo(t) {
+  const video = document.getElementById('filmroom-video');
+  if (video) video.currentTime = t;
+}
+
+function openImportVideo() {
+  window.liftbuilderApp.importVideo().then(res => {
+    if (!res || !res.success) return;
+    openVideoTagModal(res);
+  }).catch(err => { console.error('[importVideo]', err); alert('Could not import video.'); });
+}
+
+function _videoTagFormHTML(opts) {
+  const athletes = (state.roster.athletes||[]).slice().sort((a,b)=>_athName(a).localeCompare(_athName(b)));
+  const athOpts  = athletes.map(a => {
+    const id = esc(a.id||a.name);
+    return `<option value="${id}" ${id===opts.athleteId?'selected':''}>${esc(_athName(a))}</option>`;
+  }).join('');
+  const liftOpts = Object.keys(CAT_META).map(k =>
+    `<option value="${k}" ${k===opts.lift?'selected':''}>${esc(CAT_META[k].label)}</option>`).join('');
+  const meets = (state.meets||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const meetOpts = meets.map(m => `<option value="${esc(m.id)}" ${m.id===opts.meetId?'selected':''}>${esc(m.name)}</option>`).join('');
+  return `
+    <div class="fg2">
+      <div class="form-field"><label>Athlete</label>
+        <select id="vid-athlete"><option value="">— Unassigned —</option>${athOpts}</select>
+      </div>
+      <div class="form-field"><label>Lift</label>
+        <select id="vid-lift"><option value="">— None —</option>${liftOpts}</select>
+      </div>
+    </div>
+    <div class="fg2">
+      <div class="form-field"><label>Date</label><input type="date" id="vid-date" value="${esc(opts.date)}"></div>
+      <div class="form-field"><label>Meet (optional)</label>
+        <select id="vid-meet"><option value="">— None —</option>${meetOpts}</select>
+      </div>
+    </div>
+    <div class="form-field"><label>Notes</label><textarea id="vid-notes" rows="3" placeholder="Coaching notes…">${esc(opts.notes)}</textarea></div>`;
+}
+
+function openVideoTagModal(importResult) {
+  _pendingVideoImport = importResult;
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Tag Video</h3>
+    <div class="form-field"><label>Filename</label><input type="text" id="vid-filename" value="${esc(importResult.originalFilename||'Untitled clip')}"></div>
+    ${_videoTagFormHTML({ athleteId:'', lift:'', meetId:'', date:new Date().toISOString().slice(0,10), notes:'' })}
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="_pendingVideoImport=null;closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveVideoTag()">Save</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function saveVideoTag() {
+  const importResult = _pendingVideoImport;
+  if (!importResult) { closeModal(); return; }
+  const record = {
+    id:         importResult.id,
+    ext:        importResult.ext,
+    filename:   document.getElementById('vid-filename').value.trim() || importResult.originalFilename || 'Untitled clip',
+    athleteId:  document.getElementById('vid-athlete').value || null,
+    lift:       document.getElementById('vid-lift').value || null,
+    meetId:     document.getElementById('vid-meet').value || null,
+    date:       document.getElementById('vid-date').value || '',
+    notes:      document.getElementById('vid-notes').value.trim(),
+    duration:   null,
+    thumbReady: false,
+    importedAt: Date.now(),
+    strokes:    {},
+  };
+  if (!state.videos) state.videos = [];
+  state.videos.push(record);
+  _pendingVideoImport = null;
+  saveState();
+  closeModal();
+  _captureFilmRoomThumbnail(record.id, record.ext);
+  openVideoPlayer(record.id);
+}
+
+function openEditVideoTag(id) {
+  const v = (state.videos||[]).find(x=>x.id===id); if (!v) return;
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Edit Video Info</h3>
+    <div class="form-field"><label>Filename</label><input type="text" id="vid-filename" value="${esc(v.filename)}"></div>
+    ${_videoTagFormHTML({ athleteId: v.athleteId||'', lift: v.lift||'', meetId: v.meetId||'', date: v.date||'', notes: v.notes||'' })}
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveEditVideoTag('${id}')">Save</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function saveEditVideoTag(id) {
+  const v = (state.videos||[]).find(x=>x.id===id); if (!v) return;
+  v.filename  = document.getElementById('vid-filename').value.trim() || v.filename;
+  v.athleteId = document.getElementById('vid-athlete').value || null;
+  v.lift      = document.getElementById('vid-lift').value || null;
+  v.meetId    = document.getElementById('vid-meet').value || null;
+  v.date      = document.getElementById('vid-date').value || '';
+  v.notes     = document.getElementById('vid-notes').value.trim();
+  saveState();
+  closeModal();
+  renderMain();
+}
+
+function openVideoPlayer(id) {
+  _filmRoomPlayerId = id;
+  renderMain();
+}
+
+function closeVideoPlayer() {
+  _filmRoomPlayerId = null;
+  _filmRoomDrawMode = false;
+  _filmRoomEditBucket = null;
+  _filmRoomLayer = null;
+  renderMain();
+}
+
+function deleteVideo(id) {
+  const v = (state.videos||[]).find(x=>x.id===id); if (!v) return;
+  if (!confirm(`Delete "${v.filename}"? This cannot be undone.`)) return;
+  window.liftbuilderApp.deleteVideoFiles(id).catch(()=>{});
+  state.videos = (state.videos||[]).filter(x=>x.id!==id);
+  if (_filmRoomPlayerId === id) {
+    _filmRoomPlayerId = null; _filmRoomDrawMode = false;
+    _filmRoomActiveVideoId = null; _filmRoomLayersByBucket = new Map();
+    _filmRoomEditBucket = null; _filmRoomLayer = null;
+  }
+  saveState();
+  renderMain();
+}
+
+// Pure set-difference: which on-disk video ids aren't referenced by any clip in
+// any team. Kept separate from the IPC/confirm/alert glue so it's unit-testable.
+function _computeOrphanedVideoIds(diskIds, teams) {
+  const knownIds = new Set();
+  Object.values(teams || {}).forEach(t => (t.videos || []).forEach(v => knownIds.add(v.id)));
+  return (diskIds || []).filter(id => !knownIds.has(id));
+}
+
+async function cleanupOrphanedVideoFiles() {
+  if (!window.liftbuilderApp || !window.liftbuilderApp.listVideoIds) {
+    alert('Not available outside the desktop app.');
+    return;
+  }
+  const diskIds = await window.liftbuilderApp.listVideoIds();
+  const orphaned = _computeOrphanedVideoIds(diskIds, _stateCore.teams);
+  if (!orphaned.length) { alert('No orphaned video files found.'); return; }
+  if (!confirm(`Found ${orphaned.length} orphaned video file${orphaned.length!==1?'s':''} (on disk but not referenced by any clip across any team). Delete them permanently?`)) return;
+  for (const id of orphaned) await window.liftbuilderApp.deleteVideoFiles(id).catch(()=>{});
+  alert(`Deleted ${orphaned.length} orphaned file${orphaned.length!==1?'s':''}.`);
+}
+
+function _onFilmRoomVideoLoaded(id) {
+  const v = (state.videos||[]).find(x=>x.id===id);
+  const el = document.getElementById('filmroom-video');
+  if (!v || !el) return;
+  if (!v.duration && isFinite(el.duration)) {
+    v.duration = el.duration;
+    saveState();
+  }
+  if (!v.thumbReady) _captureFilmRoomThumbnail(id, v.ext);
+  _ensureAnnotationCanvas(id);
+}
+
+// ── Annotation canvas lifecycle ─────────────────────────────────────────────
+// Strokes are keyed to a time bucket (AnnotationEngine.timeBucket). While draw
+// mode is on, exactly one bucket is "being edited" (_filmRoomEditBucket, locked
+// to the paused currentTime for that draw session); while it's off, the canvas
+// just shows a read-only merge of nearby buckets as the clip plays/is scrubbed.
+// renderMain() tears the handle down on every re-render (any tab switch
+// replaces #main-area), so this always re-attaches fresh pointer listeners to
+// the fresh canvas node while reusing in-memory per-bucket layers as long as
+// it's still the same clip.
+let _filmRoomResizeHandler = null;
+
+function _ensureAnnotationCanvas(videoId) {
+  const canvas = document.getElementById('annotation-canvas');
+  const video  = document.getElementById('filmroom-video');
+  if (!canvas || !video || typeof AnnotationEngine === 'undefined') return;
+
+  if (_filmRoomActiveVideoId !== videoId) {
+    _filmRoomActiveVideoId  = videoId;
+    _filmRoomLayersByBucket = new Map();
+    _filmRoomEditBucket     = null;
+    _filmRoomLayer          = null;
+  }
+  if (!_filmRoomCanvasHandle) {
+    _filmRoomCanvasHandle = AnnotationEngine.attachCanvasHandlers(canvas, () => _filmRoomLayer, () => ({
+      tool: _activeAnnotationTool, color: _activeAnnotationColor, thickness: _activeAnnotationThickness,
+    }), () => { _persistEditBucket(); _refreshFilmRoomTicks(); });
+  }
+  if (!video._filmRoomBound) {
+    video._filmRoomBound = true;
+    video.addEventListener('timeupdate', _redrawFilmRoomCanvas);
+    video.addEventListener('seeked',     _redrawFilmRoomCanvas);
+  }
+  if (!_filmRoomResizeHandler) {
+    _filmRoomResizeHandler = () => _syncAnnotationCanvasSize();
+    window.addEventListener('resize', _filmRoomResizeHandler);
+  }
+  _syncAnnotationCanvasSize();
+}
+
+function _getOrCreateBucketLayer(bucket) {
+  if (_filmRoomLayersByBucket.has(bucket)) return _filmRoomLayersByBucket.get(bucket);
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  const persisted = v?.strokes?.[bucket];
+  const layer = AnnotationEngine.createLayer();
+  if (persisted && persisted.length) layer.strokes = persisted.slice();
+  _filmRoomLayersByBucket.set(bucket, layer);
+  return layer;
+}
+
+// Debounced so a flurry of strokes/erases doesn't hit localStorage on every pointer event.
+function _scheduleFilmRoomSave() {
+  if (_filmRoomSaveTimer) clearTimeout(_filmRoomSaveTimer);
+  _filmRoomSaveTimer = setTimeout(() => { _filmRoomSaveTimer = null; saveState(); }, 250);
+}
+
+function _persistEditBucket() {
+  if (!_filmRoomEditBucket || !_filmRoomLayer) return;
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  if (!v) return;
+  if (!v.strokes) v.strokes = {};
+  if (_filmRoomLayer.strokes.length) v.strokes[_filmRoomEditBucket] = _filmRoomLayer.strokes.slice();
+  else delete v.strokes[_filmRoomEditBucket]; // keep the map tidy — no empty-array buckets lying around
+  _scheduleFilmRoomSave();
+}
+
+// Draw mode: render exactly the locked edit bucket (editable).
+// Play/scrub mode: render a read-only merge of every bucket within tolerance of currentTime.
+function _redrawFilmRoomCanvas() {
+  if (_filmRoomDrawMode) { _filmRoomCanvasHandle?.redraw(); return; }
+  const canvas = document.getElementById('annotation-canvas');
+  const video  = document.getElementById('filmroom-video');
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  if (!canvas || !video || !v || typeof AnnotationEngine === 'undefined') return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const strokes = AnnotationEngine.getActiveLayer(v.strokes, video.currentTime);
+  AnnotationEngine.render({ strokes }, ctx, canvas.width, canvas.height);
+}
+
+function _syncAnnotationCanvasSize() {
+  const canvas = document.getElementById('annotation-canvas');
+  const video  = document.getElementById('filmroom-video');
+  if (!canvas || !video) return;
+  const w = video.clientWidth, h = video.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  _redrawFilmRoomCanvas();
+}
+
+// Called by renderMain() before every re-render — whatever tab we're leaving,
+// the window-level pointerup listener inside attachCanvasHandlers must be
+// detached or it leaks (the canvas it closes over is about to be discarded).
+// Also flushes any pending debounced save so navigating away never drops edits.
+function _teardownAnnotationCanvas() {
+  if (_filmRoomSaveTimer) { clearTimeout(_filmRoomSaveTimer); _filmRoomSaveTimer = null; saveState(); }
+  _filmRoomCanvasHandle?.detach();
+  _filmRoomCanvasHandle = null;
+  if (_filmRoomResizeHandler) { window.removeEventListener('resize', _filmRoomResizeHandler); _filmRoomResizeHandler = null; }
+}
+
+function _setAnnotationTool(tool) {
+  _activeAnnotationTool = tool;
+  document.querySelectorAll('.ann-tool-btn').forEach((btn, i) => btn.classList.toggle('active', ANNOTATION_TOOLS[i].key === tool));
+}
+
+function _setAnnotationColor(color) {
+  _activeAnnotationColor = color;
+  document.querySelectorAll('.ann-color-swatch').forEach((btn, i) => btn.classList.toggle('active', ANNOTATION_COLORS[i] === color));
+}
+
+function _setAnnotationThickness(val) {
+  _activeAnnotationThickness = Math.max(1, Number(val) || 6) / 1000;
+}
+
+function _annotationUndo() { if (_filmRoomLayer) { AnnotationEngine.undo(_filmRoomLayer); _persistEditBucket(); _refreshFilmRoomTicks(); _redrawFilmRoomCanvas(); } }
+function _annotationRedo() { if (_filmRoomLayer) { AnnotationEngine.redo(_filmRoomLayer); _persistEditBucket(); _refreshFilmRoomTicks(); _redrawFilmRoomCanvas(); } }
+
+function _annotationClear() {
+  if (_filmRoomLayer && _filmRoomLayer.strokes.length && confirm('Clear all annotations on this frame?')) {
+    AnnotationEngine.clear(_filmRoomLayer);
+    _persistEditBucket();
+    _refreshFilmRoomTicks();
+    _redrawFilmRoomCanvas();
+  }
+}
+
+// Native <video controls> and the drawing canvas both want pointer events, so
+// drawing is an explicit mode: toggling it pauses the clip and switches which
+// one gets clicks, rather than overlaying a canvas that silently eats clicks
+// meant for play/pause/seek. The edit bucket is locked to currentTime at the
+// moment draw mode turns on (the video can't be seeked while it's on, since
+// the canvas then owns all pointer events over the player).
+function _toggleDrawMode() {
+  _filmRoomDrawMode = !_filmRoomDrawMode;
+  const canvas = document.getElementById('annotation-canvas');
+  const video  = document.getElementById('filmroom-video');
+  const btn    = document.getElementById('ann-draw-toggle');
+
+  if (_filmRoomDrawMode) {
+    if (video) video.pause();
+    _filmRoomEditBucket = AnnotationEngine.timeBucket(video ? video.currentTime : 0);
+    _filmRoomLayer = _getOrCreateBucketLayer(_filmRoomEditBucket);
+  } else {
+    _filmRoomEditBucket = null;
+    _filmRoomLayer = null;
+  }
+
+  if (canvas) canvas.style.pointerEvents = _filmRoomDrawMode ? 'auto' : 'none';
+  if (btn) {
+    btn.textContent = _filmRoomDrawMode ? '✏️ Drawing — click to resume video' : '✏️ Draw on frame';
+    btn.className = 'btn ' + (_filmRoomDrawMode ? 'btn-gold' : 'btn-outline');
+  }
+  _redrawFilmRoomCanvas();
+}
+
+// Generates a thumbnail off-screen (a hidden <video> + <canvas> frame grab) so it
+// never disturbs whatever the coach is actually watching in the visible player.
+function _captureFilmRoomThumbnail(id, ext) {
+  const hidden = document.createElement('video');
+  hidden.src = `lb-video://${id}/source.${ext}`;
+  hidden.crossOrigin = 'anonymous';
+  hidden.muted = true;
+  hidden.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+  document.body.appendChild(hidden);
+  const cleanup = () => hidden.remove();
+
+  hidden.addEventListener('loadedmetadata', () => {
+    const v = (state.videos||[]).find(x=>x.id===id);
+    if (v && !v.duration && isFinite(hidden.duration)) { v.duration = hidden.duration; saveState(); }
+    hidden.currentTime = Math.min(1, (hidden.duration||2) / 2);
+  });
+
+  hidden.addEventListener('seeked', () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width  = hidden.videoWidth  || 320;
+      canvas.height = hidden.videoHeight || 180;
+      canvas.getContext('2d').drawImage(hidden, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        if (!blob) { cleanup(); return; }
+        blob.arrayBuffer().then(buf => {
+          window.liftbuilderApp.saveVideoThumbnail(id, buf).then(res => {
+            if (res && res.success) {
+              const v = (state.videos||[]).find(x=>x.id===id);
+              if (v) { v.thumbReady = true; saveState(); }
+              document.querySelectorAll(`img[data-video-id="${id}"]`).forEach(img => {
+                img.src = `lb-video://${id}/thumb.jpg?t=${Date.now()}`;
+              });
+            }
+            cleanup();
+          });
+        });
+      }, 'image/jpeg', 0.8);
+    } catch (err) { console.error('[filmroom thumbnail]', err); cleanup(); }
+  });
+
+  hidden.addEventListener('error', cleanup);
+}
+
+// ── Export annotated clip (Phase 4) ─────────────────────────────────────────
+// Renders at 1x real-world time (no ffmpeg/native deps): a hidden source <video>
+// is played (or, lacking requestVideoFrameCallback, manually stepped through
+// sample times), each frame is drawn to an offscreen canvas with the same
+// getActiveLayer() strokes a coach would see live, and captureStream(0) +
+// track.requestFrame() push exactly that composited frame into a MediaRecorder —
+// manual "push" mode avoids any mismatch between a fixed capture rate and
+// however fast frames actually get drawn. Output is .webm, video-only (no audio).
+let _filmRoomExportHandle = null;
+
+function openExportClipModal() {
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  if (!v) return;
+  const dur = v.duration || 0;
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Export Annotated Clip</h3>
+    <div class="fg2">
+      <div class="form-field"><label>Start (sec)</label><input type="number" id="exp-clip-start" min="0" max="${dur}" step="0.1" value="0"></div>
+      <div class="form-field"><label>End (sec)</label><input type="number" id="exp-clip-end" min="0" max="${dur}" step="0.1" value="${dur.toFixed(1)}"></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Exports as a <strong>.webm</strong> file (playable in Chrome, Firefox, VLC) with annotations burned in — video only, no audio. MP4 isn't supported yet. Rendering happens in real time, so a 30-second clip takes about 30 seconds.</div>
+    <div id="exp-clip-progress-wrap" style="display:none;margin-bottom:10px;">
+      <div style="background:var(--dark2);border-radius:4px;overflow:hidden;height:8px;">
+        <div id="exp-clip-progress-bar" style="background:var(--gold);height:100%;width:0%;transition:width .1s linear;"></div>
+      </div>
+      <div id="exp-clip-progress-label" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="exp-clip-cancel-btn" onclick="cancelExportClip()">Cancel</button>
+      <button class="btn btn-gold" id="exp-clip-go-btn" onclick="runExportClip()">Export</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function cancelExportClip() {
+  if (_filmRoomExportHandle) { _filmRoomExportHandle.abort(); _filmRoomExportHandle = null; }
+  closeModal();
+}
+
+async function runExportClip() {
+  const v = (state.videos||[]).find(x => x.id === _filmRoomPlayerId);
+  if (!v) return;
+  const dur   = v.duration || 0;
+  const start = Math.max(0, parseFloat(document.getElementById('exp-clip-start').value) || 0);
+  const end   = Math.min(dur || (start + 1), parseFloat(document.getElementById('exp-clip-end').value) || dur || (start + 1));
+  if (!(end > start)) { alert('End time must be after start time.'); return; }
+
+  const goBtn     = document.getElementById('exp-clip-go-btn');
+  const cancelBtn = document.getElementById('exp-clip-cancel-btn');
+  const progWrap  = document.getElementById('exp-clip-progress-wrap');
+  const progBar   = document.getElementById('exp-clip-progress-bar');
+  const progLabel = document.getElementById('exp-clip-progress-label');
+  goBtn.disabled = true;
+  cancelBtn.textContent = 'Cancel Export';
+  progWrap.style.display = 'block';
+  progLabel.textContent = 'Rendering… 0%';
+
+  const handle = _renderAnnotatedClip(v, start, end, (pct) => {
+    if (progBar)   progBar.style.width = (pct * 100).toFixed(0) + '%';
+    if (progLabel) progLabel.textContent = `Rendering… ${(pct * 100).toFixed(0)}%`;
+  });
+  _filmRoomExportHandle = handle;
+
+  try {
+    const blob = await handle.promise;
+    _filmRoomExportHandle = null;
+    if (progLabel) progLabel.textContent = 'Saving…';
+    const buf = await blob.arrayBuffer();
+    const baseName = (v.filename || 'clip').replace(/\.[^.]+$/, '');
+    const res = await window.liftbuilderApp.exportVideoClip(buf, baseName);
+    if (res && res.success) {
+      closeModal();
+    } else if (res && res.error) {
+      alert('Export failed: ' + res.error);
+      goBtn.disabled = false;
+    } else {
+      // User canceled the native save dialog — not an error, just let them retry.
+      goBtn.disabled = false;
+      progWrap.style.display = 'none';
+    }
+  } catch (err) {
+    _filmRoomExportHandle = null;
+    if (err && err.message !== 'Export canceled') {
+      console.error('[export clip]', err);
+      alert('Export failed: ' + (err.message || err));
+    }
+    goBtn.disabled = false;
+    progWrap.style.display = 'none';
+  }
+}
+
+// Returns { promise, abort() } rather than a bare Promise so an in-progress
+// (real-time, potentially long) export can be canceled from the modal.
+function _renderAnnotatedClip(v, start, end, onProgress) {
+  let aborted = false;
+  let recorder = null, srcVideo = null;
+
+  const promise = new Promise((resolve, reject) => {
+    if (typeof AnnotationEngine === 'undefined' || !window.MediaRecorder || !document.createElement('canvas').captureStream) {
+      reject(new Error('Video export is not supported in this environment.'));
+      return;
+    }
+
+    srcVideo = document.createElement('video');
+    srcVideo.src = `lb-video://${v.id}/source.${v.ext}`;
+    srcVideo.crossOrigin = 'anonymous';
+    srcVideo.muted = true; // exported audio isn't supported yet — see modal copy
+    srcVideo.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+    document.body.appendChild(srcVideo);
+    const cleanup = () => srcVideo.remove();
+
+    srcVideo.addEventListener('error', () => { cleanup(); reject(new Error('Could not load source video.')); });
+
+    srcVideo.addEventListener('loadedmetadata', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = srcVideo.videoWidth  || 640;
+      canvas.height = srcVideo.videoHeight || 360;
+      const ctx = canvas.getContext('2d');
+
+      const stream = canvas.captureStream(0); // manual mode — we push frames via track.requestFrame()
+      const track  = stream.getVideoTracks()[0];
+      const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        .find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+      recorder = new MediaRecorder(stream, { mimeType });
+      const chunks = [];
+      recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      recorder.onstop  = () => { cleanup(); if (aborted) reject(new Error('Export canceled')); else resolve(new Blob(chunks, { type: mimeType })); };
+      recorder.onerror = e => { cleanup(); reject(e.error || new Error('MediaRecorder error')); };
+
+      const drawFrame = () => {
+        ctx.drawImage(srcVideo, 0, 0, canvas.width, canvas.height);
+        const strokes = AnnotationEngine.getActiveLayer(v.strokes, srcVideo.currentTime);
+        AnnotationEngine.renderStrokes(strokes, ctx, canvas.width, canvas.height);
+        track.requestFrame();
+      };
+
+      if (typeof srcVideo.requestVideoFrameCallback === 'function') {
+        const onFrame = () => {
+          if (aborted) return;
+          if (srcVideo.currentTime >= end || srcVideo.ended) { recorder.stop(); return; }
+          drawFrame();
+          if (onProgress) onProgress(Math.min(1, (srcVideo.currentTime - start) / (end - start)));
+          srcVideo.requestVideoFrameCallback(onFrame);
+        };
+        srcVideo.currentTime = start;
+        srcVideo.play().then(() => { recorder.start(); srcVideo.requestVideoFrameCallback(onFrame); })
+          .catch(err => { cleanup(); reject(err); });
+      } else {
+        // Fallback for environments without requestVideoFrameCallback: step through a
+        // fixed list of sample times, seeking between each. captureStream(0) +
+        // requestFrame() keeps this frame-accurate regardless of how fast seeks resolve.
+        const frameTimes = AnnotationEngine.computeExportFrameTimes(start, end, 30);
+        let i = 0;
+        recorder.start();
+        const onSeeked = () => {
+          if (aborted) return;
+          drawFrame();
+          if (onProgress) onProgress(Math.min(1, i / frameTimes.length));
+          i += 1;
+          if (i >= frameTimes.length) { recorder.stop(); return; }
+          srcVideo.currentTime = frameTimes[i];
+        };
+        srcVideo.addEventListener('seeked', onSeeked);
+        if (frameTimes.length) srcVideo.currentTime = frameTimes[0];
+        else recorder.stop();
+      }
+    }, { once: true });
+  });
+
+  return {
+    promise,
+    abort() {
+      aborted = true;
+      try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch { /* already stopped */ }
+      try { srcVideo && srcVideo.pause(); } catch { /* already gone */ }
+    },
+  };
+}
+
 // Roster filter state
 let _libraryFilter = { search: '', category: '' };
 let _rosterFilter  = { gender:'', wc:'', team:'', q:'' };
@@ -4853,12 +5602,44 @@ function openEditAthlete(idx) {
           ${prRows(k,l)}
         </div>`).join('')}
     </div>
+    ${_athleteFilmSectionHTML(idx)}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-gold" onclick="saveAthlete(${idx})">Save</button>
     </div>`;
   document.getElementById('overlay').style.display='flex';
   wireAthletePreview();
+}
+
+// Lets a coach jump straight from an athlete's PR/edit modal to their tagged film.
+function _athleteFilmSectionHTML(idx) {
+  const a = state.roster.athletes[idx]; if (!a) return '';
+  const athKey = a.id || a.name;
+  const clips = (state.videos||[]).filter(v => v.athleteId === athKey).sort((x, y) => (y.importedAt||0) - (x.importedAt||0));
+  const header = `<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:#666;">FILM${clips.length ? ` (${clips.length})` : ''}</div>`;
+  if (!clips.length) {
+    return `<div style="margin-top:20px;border-top:1px solid #2a2a2a;padding-top:16px;">${header}
+      <div style="color:#666;font-size:12px;padding:6px 0;">No clips tagged to this athlete yet.</div>
+    </div>`;
+  }
+  const cards = clips.map(v => {
+    const liftLabel = CAT_META[v.lift]?.label || '';
+    return `<div onclick="_openVideoFromAthleteModal('${v.id}')" title="${esc(v.filename)}" style="cursor:pointer;background:var(--dark1);border:1px solid var(--dark3);border-radius:6px;overflow:hidden;">
+      <div style="position:relative;aspect-ratio:16/9;background:var(--dark2);">
+        <img data-video-id="${v.id}" crossorigin="anonymous" src="lb-video://${v.id}/thumb.jpg" onerror="this.style.display='none';" style="width:100%;height:100%;object-fit:cover;">
+      </div>
+      <div style="padding:5px 6px;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${liftLabel?esc(liftLabel):esc(v.filename)}</div>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:20px;border-top:1px solid #2a2a2a;padding-top:16px;">${header}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-top:8px;">${cards}</div>
+  </div>`;
+}
+
+function _openVideoFromAthleteModal(id) {
+  closeModal();
+  switchTab('filmroom');
+  openVideoPlayer(id);
 }
 
 function openLogPR(idx) {
@@ -5960,6 +6741,7 @@ const TOOL_DEFS = [
   { key:'calculator', label:'Calculator',      icon:'⚖️' },
   { key:'templates',  label:'Templates',       icon:'📐' },
   { key:'library',    label:'Exercise Library',icon:'📚' },
+  { key:'filmroom',   label:'Film Room',       icon:'🎬' },
   { key:'hostmeet',   label:'Host Meet',       icon:'🏆' },
 ];
 function loadToolsVisible() {
@@ -6004,7 +6786,7 @@ function openSettings() {
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Data &amp; Backup</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
-        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Full Backup</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Export all teams and programs as a JSON file</div></div>
+        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Full Backup</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Export all teams and programs as a JSON file — includes Film Room clip tags/notes/annotations, but not the video files themselves</div></div>
         <button onclick="exportDataJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬇ Download</button>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
@@ -6014,6 +6796,10 @@ function openSettings() {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
         <div><div style="font-size:14px;font-weight:600;color:var(--white);">Restore</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Import a previously exported JSON backup</div></div>
         <button onclick="importDataJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬆ Restore</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--dark3);border-radius:8px;">
+        <div><div style="font-size:14px;font-weight:600;color:var(--white);">Film Room Storage</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Remove video files on disk that no longer belong to any clip (e.g. after a corrupted or hand-edited backup restore)</div></div>
+        <button onclick="cleanupOrphanedVideoFiles()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">🧹 Clean Up</button>
       </div>
     </div>
     ${(function(){
@@ -6282,6 +7068,7 @@ initApp();
   });
 })();
 </script>
+<script src="annotation-engine.js"></script>
 <script src="host-meet.js"></script>
 </body>
 </html>

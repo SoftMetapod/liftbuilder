@@ -1,12 +1,36 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, protocol, net } = require('electron');
 const path   = require('path');
 const http   = require('http');
 const os     = require('os');
 const fs     = require('fs');
 const crypto = require('crypto');
+const { pathToFileURL } = require('url');
 
 let mainWindow   = null;
 let _autoUpdater = null;
+
+// ── Film Room video storage ─────────────────────────────────────────────────
+// Videos live on disk (userData/videos/<uuid>/) — never in localStorage, which
+// can't hold multi-MB binaries. The renderer only ever sees opaque uuids; the
+// lb-video:// protocol below resolves them to real files, so the sandboxed,
+// contextIsolated renderer never needs filesystem access of its own.
+const VIDEOS_DIR = path.join(app.getPath('userData'), 'videos');
+const VIDEO_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function _videoDir(id) {
+  if (typeof id !== 'string' || !VIDEO_UUID_RE.test(id)) return null;
+  return path.join(VIDEOS_DIR, id);
+}
+function _readVideoManifest(id) {
+  const dir = _videoDir(id);
+  if (!dir) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')); }
+  catch { return null; }
+}
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'lb-video', privileges: { stream: true, bypassCSP: false, corsEnabled: true, supportFetchAPI: true } },
+]);
 
 // ── Platform server state ──────────────────────────────────────────────────
 let _httpServer        = null;
@@ -516,6 +540,31 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // ── Film Room video protocol ────────────────────────────────────────────
+  protocol.handle('lb-video', async (request) => {
+    try {
+      const url      = new URL(request.url);
+      const id       = url.hostname;
+      const manifest = _readVideoManifest(id);
+      if (!manifest) return new Response('Not found', { status: 404 });
+      const name = url.pathname.replace(/^\/+/, '');
+      const allowed = name === `source.${manifest.ext}` || name === 'thumb.jpg';
+      if (!allowed) return new Response('Not found', { status: 404 });
+      const filePath = path.join(_videoDir(id), name);
+      if (!fs.existsSync(filePath)) return new Response('Not found', { status: 404 });
+      // Served with a permissive CORS header (safe — these bytes never leave the
+      // local app) so <video>/<canvas> can read pixels back without tainting the
+      // canvas; this is required for thumbnail capture and the Phase-4 export pipeline.
+      const fileRes = await net.fetch(pathToFileURL(filePath).href, { headers: request.headers });
+      const headers = new Headers(fileRes.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(fileRes.body, { status: fileRes.status, statusText: fileRes.statusText, headers });
+    } catch (err) {
+      console.error('[lb-video]', err);
+      return new Response('Error', { status: 500 });
+    }
+  });
+
   // ── IPC handlers ───────────────────────────────────────────────────────────
   ipcMain.handle('check-for-updates',  () => getUpdater().checkForUpdates());
   ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/SoftMetapod/liftbuilder/releases/latest'));
@@ -738,6 +787,87 @@ app.whenReady().then(() => {
     ps.clockStart    = null;
     ps.clockDuration = null;
     _broadcast();
+  });
+
+  // ── Film Room IPC ──────────────────────────────────────────────────────
+  ipcMain.handle('import-video', async (event) => {
+    if (!_isMainWindow(event)) return { success: false };
+    const { dialog, BrowserWindow: BW } = require('electron');
+    const senderWin = BW.fromWebContents(event.sender) || mainWindow;
+    const { filePaths, canceled } = await dialog.showOpenDialog(senderWin, {
+      title: 'Import Lift Video',
+      properties: ['openFile'],
+      filters: [{ name: 'Video Files', extensions: ['mp4', 'mov', 'm4v', 'webm'] }],
+    });
+    if (canceled || !filePaths?.[0]) return { success: false };
+    try {
+      const srcPath = filePaths[0];
+      const ext     = (path.extname(srcPath).slice(1) || 'mp4').toLowerCase();
+      const id      = crypto.randomUUID();
+      const dir     = path.join(VIDEOS_DIR, id);
+      fs.mkdirSync(dir, { recursive: true });
+      const destPath = path.join(dir, `source.${ext}`);
+      fs.copyFileSync(srcPath, destPath);
+      const sizeBytes        = fs.statSync(destPath).size;
+      const originalFilename = path.basename(srcPath);
+      fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ ext, importedAt: Date.now(), sizeBytes, originalFilename }));
+      return { success: true, id, ext, sizeBytes, originalFilename };
+    } catch (err) {
+      console.error('[import-video]', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('save-video-thumbnail', (event, { id, buf } = {}) => {
+    if (!_isMainWindow(event)) return { success: false };
+    const dir = _videoDir(id);
+    if (!dir || !fs.existsSync(dir)) return { success: false };
+    try {
+      fs.writeFileSync(path.join(dir, 'thumb.jpg'), Buffer.from(buf));
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('delete-video-files', (event, { id } = {}) => {
+    if (!_isMainWindow(event)) return { success: false };
+    const dir = _videoDir(id);
+    if (!dir) return { success: false };
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('list-video-ids', (event) => {
+    if (!_isMainWindow(event)) return [];
+    try {
+      if (!fs.existsSync(VIDEOS_DIR)) return [];
+      return fs.readdirSync(VIDEOS_DIR).filter(n => VIDEO_UUID_RE.test(n));
+    } catch { return []; }
+  });
+
+  ipcMain.handle('export-video-clip', async (event, { bytes, filename } = {}) => {
+    if (!_isMainWindow(event)) return { success: false };
+    const { dialog, BrowserWindow: BW } = require('electron');
+    const senderWin = BW.fromWebContents(event.sender) || mainWindow;
+    const safeName = (filename || 'LiftBuilder_Clip').replace(/[/\\:*?"<>|]+/g, '_');
+    const { filePath, canceled } = await dialog.showSaveDialog(senderWin, {
+      title: 'Save Annotated Clip',
+      defaultPath: safeName + '.webm',
+      filters: [{ name: 'WebM Video', extensions: ['webm'] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    try {
+      fs.writeFileSync(filePath, Buffer.from(bytes));
+      return { success: true };
+    } catch (err) {
+      console.error('[export-video-clip]', err);
+      return { success: false, error: err.message };
+    }
   });
 
   createWindow();

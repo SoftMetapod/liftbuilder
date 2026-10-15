@@ -104,6 +104,22 @@ describe('innerHTML audit — known user-controlled fields are escaped', () => {
     });
   });
 
+  describe('Film Room video metadata', () => {
+    it('v.filename is escaped in gallery card and player header innerHTML', () => {
+      expect(html).toContain('${esc(v.filename)}</div>');
+      expect(html).toContain('">${esc(v.filename)}</h2>');
+    });
+
+    it('v.notes is escaped in the player notes panel', () => {
+      expect(html).toContain('${esc(v.notes)}</div>');
+    });
+
+    it('v.filename and v.notes are escaped in the edit-tag form value/textarea', () => {
+      expect(html).toContain('value="${esc(v.filename)}"');
+      expect(html).toContain('>${esc(opts.notes)}</textarea>');
+    });
+  });
+
   describe('Security helpers present', () => {
     it('esc() helper is defined', () => {
       expect(html).toMatch(/function esc\(v\)/);

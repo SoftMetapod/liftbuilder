@@ -27,4 +27,10 @@ contextBridge.exposeInMainWorld('liftbuilderApp', {
   directorResumeClock: (pNum) => ipcRenderer.invoke('director-resume-clock', { pNum }),
   directorResetClock:  (pNum) => ipcRenderer.invoke('director-reset-clock',  { pNum }),
   directorTimerSync:   (data) => ipcRenderer.invoke('director-timer-sync',   data),
+  // Film Room (video review)
+  importVideo:         ()         => ipcRenderer.invoke('import-video'),
+  saveVideoThumbnail:  (id, buf)  => ipcRenderer.invoke('save-video-thumbnail', { id, buf }),
+  deleteVideoFiles:    (id)       => ipcRenderer.invoke('delete-video-files', { id }),
+  listVideoIds:        ()         => ipcRenderer.invoke('list-video-ids'),
+  exportVideoClip:     (bytes, filename) => ipcRenderer.invoke('export-video-clip', { bytes, filename }),
 });
