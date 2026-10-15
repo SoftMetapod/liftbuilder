@@ -4,10 +4,10 @@
 # SRI (SHA-384 base64) for use in integrity= attributes:
 #   openssl dgst -sha384 -binary vendor/<file> | openssl base64 -A
 
-b42b8311bb236c455ea0796549ecc81d8ac0b5ef40f87b9e50a72dd7448d0ea6  vendor/purify.min.js
+cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31  vendor/purify.min.js
 74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3  vendor/chart.umd.js
 98ccf17aa10c20bb1301762618fcc9b6ab3a4e7f26b6071d64d0b41154df3875  vendor/jspdf.umd.min.js
 
-# DOMPurify 3.4.3   — SHA-384 SRI: sha384-eCz05P6PHhVK1N9YlA/YY0JLOp3wc37jUGRWexbZ3VZj66h7exte7mtRSD6QoOgZ
+# DOMPurify 3.4.17  — SHA-384 SRI: sha384-P0JNneQf81HOl9VwNXK76cQ9VMD6Nfsnepxb0cCOg8+UzEdzgPHAPV4wVQrvYQSx
 # Chart.js 4.4.1    — SHA-384 SRI: sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG
 # jsPDF 2.5.1       — SHA-384 SRI: sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk
